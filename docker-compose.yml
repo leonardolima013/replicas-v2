@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  db_metadados:
+    image: postgres:15-alpine
+    container_name: replicas_metadados_db
+    restart: always
+    environment:
+      POSTGRES_USER: pgroot
+      POSTGRES_PASSWORD: pg@root
+      POSTGRES_DB: replicas_metadados_db
+    ports:
+      - "5434:5432" # 5434 externa -> 5432 interna
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgroot -d replicas_metadados_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: replicas-v2_api
+    volumes:
+      - ./backend:/app/backend
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: db_metadados
+      DB_PORT: "5432" # Porta interna do container
+      POSTGRES_USER: pgroot
+      POSTGRES_PASSWORD: pg@root
+      POSTGRES_DB: replicas_metadados_db
+    depends_on:
+      db_metadados:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
