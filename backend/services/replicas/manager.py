@@ -13,10 +13,10 @@ def find_free_port():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
-def create_replica_container(user_email: str):
-    # Sanitiza o email para usar no nome do contentor (ex: joao@empresa -> replica_joao_empresa)
-    safe_name = user_email.replace("@", "_").replace(".", "_")
-    container_name = f"replica_{safe_name}"
+def create_replica_container(username: str, db_password: str):
+    # Nome do banco sempre será {usuario}_db
+    db_name = f"{username}_db"
+    container_name = f"replica_{username}"
 
     # 1. Verificar se já existe e remover (para evitar erro de nome duplicado)
     try:
@@ -35,7 +35,11 @@ def create_replica_container(user_email: str):
     container = client.containers.run(
         "postgres:alpine",
         name=container_name,
-        environment=["POSTGRES_PASSWORD=replica_segura"],
+        environment=[
+            f"POSTGRES_USER={username}",
+            f"POSTGRES_PASSWORD={db_password}",
+            f"POSTGRES_DB={db_name}"
+        ],
         detach=True,
         ports={'5432/tcp': port} # Mapeia 5432 interna para a porta aleatória externa
     )
@@ -49,7 +53,121 @@ def create_replica_container(user_email: str):
     return {
         "container_id": container.short_id,
         "name": container_name,
+        "database_name": db_name,
         "port": port,
         "status": container.status,
         "connection_string": f"ssh -L 5432:localhost:{port} utilizador@seu-servidor"
+    }
+
+def list_all_replicas():
+    """Lista todas as réplicas (containers que começam com 'replica_')."""
+    containers = client.containers.list(all=True, filters={"name": "replica_"})
+    
+    replicas = []
+    for container in containers:
+        # Extrai o username do nome do container (remove o prefixo 'replica_')
+        username = container.name.replace("replica_", "")
+        
+        # Pega a porta mapeada
+        port = None
+        if container.ports and '5432/tcp' in container.ports:
+            port_bindings = container.ports['5432/tcp']
+            if port_bindings:
+                port = int(port_bindings[0]['HostPort'])
+        
+        replicas.append({
+            "container_id": container.short_id,
+            "name": container.name,
+            "username": username,
+            "database_name": f"{username}_db",
+            "port": port,
+            "status": container.status,
+            "created": container.attrs['Created']
+        })
+    
+    return replicas
+
+def get_user_replica(username: str):
+    """Retorna informações sobre a réplica de um usuário específico."""
+    container_name = f"replica_{username}"
+    
+    try:
+        container = client.containers.get(container_name)
+        
+        # Pega a porta mapeada
+        port = None
+        if container.ports and '5432/tcp' in container.ports:
+            port_bindings = container.ports['5432/tcp']
+            if port_bindings:
+                port = int(port_bindings[0]['HostPort'])
+        
+        return {
+            "container_id": container.short_id,
+            "name": container.name,
+            "username": username,
+            "database_name": f"{username}_db",
+            "port": port,
+            "status": container.status,
+            "created": container.attrs['Created'],
+            "connection_string": f"ssh -L 5432:localhost:{port} utilizador@seu-servidor" if port else None
+        }
+    except docker.errors.NotFound:
+        return None
+
+def delete_user_replica(username: str):
+    """Deleta a réplica de um usuário específico."""
+    container_name = f"replica_{username}"
+    
+    try:
+        container = client.containers.get(container_name)
+        
+        # Para o container se estiver rodando
+        if container.status == "running":
+            container.stop()
+        
+        # Remove o container
+        container.remove()
+        
+        return {
+            "msg": f"Réplica do usuário '{username}' deletada com sucesso",
+            "container_name": container_name,
+            "username": username
+        }
+    except docker.errors.NotFound:
+        return None
+
+def delete_all_replicas():
+    """Deleta todas as réplicas (containers que começam com 'replica_')."""
+    containers = client.containers.list(all=True, filters={"name": "replica_"})
+    
+    deleted_replicas = []
+    
+    for container in containers:
+        username = container.name.replace("replica_", "")
+        
+        try:
+            # Para o container se estiver rodando
+            if container.status == "running":
+                container.stop()
+            
+            # Remove o container
+            container.remove()
+            
+            deleted_replicas.append({
+                "container_name": container.name,
+                "username": username,
+                "status": "deleted"
+            })
+        except Exception as e:
+            deleted_replicas.append({
+                "container_name": container.name,
+                "username": username,
+                "status": "error",
+                "error": str(e)
+            })
+    
+    return {
+        "msg": f"{len(deleted_replicas)} réplica(s) processada(s)",
+        "deleted_count": len([r for r in deleted_replicas if r["status"] == "deleted"]),
+        "replicas": deleted_replicas
     }

@@ -10,7 +10,7 @@ services:
       POSTGRES_PASSWORD: pg@root
       POSTGRES_DB: replicas_metadados_db
     ports:
-      - "5434:5432" # 5434 externa -> 5432 interna
+      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,6 +18,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   backend:
     build:
@@ -31,13 +34,16 @@ services:
       - "8000:8000"
     environment:
       DB_HOST: db_metadados
-      DB_PORT: "5432" # Porta interna do container
+      DB_PORT: "5432"
       POSTGRES_USER: pgroot
       POSTGRES_PASSWORD: pg@root
       POSTGRES_DB: replicas_metadados_db
     depends_on:
       db_metadados:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
 volumes:
   postgres_data:

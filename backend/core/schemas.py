@@ -1,14 +1,14 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from backend.core.models import UserRole
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    usuario: str
     password: str
     role: UserRole = UserRole.DEV
 
 class UserResponse(BaseModel):
     id: int
-    email: EmailStr
+    usuario: str
     is_active: bool
     role: UserRole
     
