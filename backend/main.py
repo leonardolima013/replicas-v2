@@ -1,31 +1,41 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
 
-from backend.core import models, schemas, security, database
-from backend.routers import auth
+from backend.core import models, database
+from backend.routers import auth, users
 from backend.services.replicas import router as replicas_router
 
 models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Replicas-v2")
+
+# Rotas da API
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(replicas_router.router)
 
-@app.post("/users/", response_model=schemas.UserResponse)
-def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    db_user = db.query(models.User).filter(models.User.usuario == user.usuario).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Usuário já cadastrado")
-    
-    hashed_password = security.get_password_hash(user.password)
-    new_user = models.User(usuario=user.usuario, hashed_password=hashed_password, role=user.role)
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    return new_user
+# Servir arquivos estáticos do frontend (após build)
+frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
 
-@app.get("/users/", response_model=List[schemas.UserResponse])
-def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
-    users = db.query(models.User).offset(skip).limit(limit).all()
-    return users
+if frontend_dist.exists():
+    # Montar arquivos estáticos (CSS, JS, imagens)
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
+    
+    # Rota catch-all para SPA (Vue Router)
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """
+        Serve o index.html para todas as rotas que não sejam da API.
+        Isso permite que o Vue Router funcione corretamente.
+        """
+        # Se for uma rota da API, não serve o frontend
+        if full_path.startswith(("auth/", "users/", "replicas/", "docs", "redoc", "openapi.json")):
+            return {"detail": "Not Found"}
+        
+        # Para todas as outras rotas, serve o index.html
+        index_file = frontend_dist / "index.html"
+        if index_file.exists():
+            return FileResponse(index_file)
+        return {"detail": "Frontend not built"}

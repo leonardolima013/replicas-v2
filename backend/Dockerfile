@@ -1,30 +1,53 @@
-# 1. Usar uma imagem Python leve e moderna (alternativa com versão específica)
+# ===== ESTÁGIO 1: BUILD DO FRONTEND =====
+FROM node:20-alpine AS frontend-builder
+
+# Definir diretório de trabalho
+WORKDIR /frontend
+
+# Copiar arquivos de configuração do frontend
+COPY frontend/package*.json ./
+COPY frontend/vite.config.js ./
+COPY frontend/tailwind.config.js ./
+COPY frontend/postcss.config.js ./
+COPY frontend/index.html ./
+
+# Instalar dependências
+RUN npm install
+
+# Copiar código fonte do frontend
+COPY frontend/src ./src
+
+# Build do frontend (gera a pasta /frontend/dist)
+RUN npm run build
+
+# ===== ESTÁGIO 2: PRODUÇÃO (BACKEND + FRONTEND) =====
 FROM python:3.11.9-slim
 
-# 2. Definir variáveis de ambiente para evitar arquivos .pyc e logs presos
+# Definir variáveis de ambiente
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# 3. Definir diretório de trabalho dentro do container
+# Definir diretório de trabalho
 WORKDIR /app
 
-# 4. Instalar dependências do sistema necessárias para compilar pacotes (se necessário)
+# Instalar dependências do sistema
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libpq-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 5. Copiar e instalar dependências Python (Cache Layering)
-# Copiamos primeiro só o requirements para o Docker usar cache se não houver mudanças
+# Copiar e instalar dependências Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. Copiar o restante do código
-COPY . .
+# Copiar código do backend
+COPY backend ./backend
 
-# 7. Expor a porta 8000
+# Copiar arquivos do frontend buildado do ESTÁGIO 1
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+
+# Expor a porta 8000
 EXPOSE 8000
 
-# 8. Comando para rodar a aplicação
-# Note que usamos --host 0.0.0.0 para aceitar conexões externas ao container
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Comando para rodar a aplicação
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
