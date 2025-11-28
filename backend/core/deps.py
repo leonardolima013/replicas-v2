@@ -17,14 +17,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     try:
         # Tenta decodificar o token
         payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+        usuario: str = payload.get("sub")
+        if usuario is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
     
     # Busca o usuário no banco para garantir que ele ainda existe/está ativo
-    user = db.query(models.User).filter(models.User.email == email).first()
+    user = db.query(models.User).filter(models.User.usuario == usuario).first()
     if user is None:
         raise credentials_exception
         

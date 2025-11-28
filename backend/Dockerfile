@@ -1,5 +1,5 @@
-# 1. Usar uma imagem Python leve e moderna
-FROM python:3.11-slim
+# 1. Usar uma imagem Python leve e moderna (alternativa com versão específica)
+FROM python:3.11.9-slim
 
 # 2. Definir variáveis de ambiente para evitar arquivos .pyc e logs presos
 ENV PYTHONDONTWRITEBYTECODE=1

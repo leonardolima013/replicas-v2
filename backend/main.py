@@ -14,12 +14,12 @@ app.include_router(replicas_router.router)
 
 @app.post("/users/", response_model=schemas.UserResponse)
 def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    db_user = db.query(models.User).filter(models.User.usuario == user.usuario).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email Ja cadastrado")
+        raise HTTPException(status_code=400, detail="Usuário já cadastrado")
     
     hashed_password = security.get_password_hash(user.password)
-    new_user = models.User(email=user.email, hashed_password=hashed_password, role=user.role)
+    new_user = models.User(usuario=user.usuario, hashed_password=hashed_password, role=user.role)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)

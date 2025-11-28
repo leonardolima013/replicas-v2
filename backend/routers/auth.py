@@ -10,20 +10,20 @@ def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(database.get_db)
 ):
-    # 1. Busca usuário pelo email (form_data.username no OAuth2 é o nosso email)
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    # 1. Busca usuário pelo usuario (form_data.username no OAuth2 é o nosso usuario)
+    user = db.query(models.User).filter(models.User.usuario == form_data.username).first()
     
     # 2. Verifica se usuário existe e senha bate
     if not user or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou senha incorretos",
+            detail="Usuário ou senha incorretos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     # 3. Gera o token
     access_token = security.create_access_token(
-        data={"sub": user.email, "role": user.role}
+        data={"sub": user.usuario, "role": user.role}
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
