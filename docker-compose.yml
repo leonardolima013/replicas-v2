@@ -22,13 +22,12 @@ services:
       - 8.8.8.8
       - 8.8.4.4
 
-  backend:
+  app:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: replicas-v2_api
+    container_name: replicas-v2_app
     volumes:
-      - ./backend:/app/backend
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8000:8000"
@@ -38,6 +37,9 @@ services:
       POSTGRES_USER: pgroot
       POSTGRES_PASSWORD: pg@root
       POSTGRES_DB: replicas_metadados_db
+      JWT_SECRET_KEY: "your-super-secret-key-change-in-production"
+      ALGORITHM: "HS256"
+      ACCESS_TOKEN_EXPIRE_MINUTES: "300"
     depends_on:
       db_metadados:
         condition: service_healthy

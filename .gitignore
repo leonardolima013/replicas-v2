@@ -1,0 +1,35 @@
+# Ignorar node_modules e build do frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Ignorar cache Python
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignorar banco de dados local
+*.db
+*.sqlite
+*.sqlite3
+
+# Ignorar variáveis de ambiente
+.env
+.env.local
+
+# Ignorar logs
+*.log
+
+# Ignorar IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignorar sistema
+.DS_Store
+Thumbs.db
