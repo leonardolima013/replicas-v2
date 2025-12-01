@@ -2,8 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from backend.core import models, schemas, security, database, deps
+import docker
 
 router = APIRouter(prefix="/users", tags=["Usuários"])
+
+# Cliente Docker para deletar réplicas ao deletar usuário
+docker_client = docker.from_env()
 
 @router.post("/", response_model=schemas.UserResponse)
 def create_user(
@@ -53,3 +57,58 @@ def read_users(
     
     users = db.query(models.User).offset(skip).limit(limit).all()
     return users
+
+@router.delete("/{username}")
+def delete_user(
+    username: str,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(deps.get_current_user)
+):
+    """
+    Deleta um usuário. Apenas ADMINs podem deletar usuários.
+    Se o usuário tiver uma réplica, ela será deletada também.
+    """
+    # Verificar se o usuário logado é admin
+    if current_user.role != "adm":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas administradores podem deletar usuários"
+        )
+    
+    # Não permitir que o admin delete a si mesmo
+    if current_user.usuario == username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Você não pode deletar seu próprio usuário"
+        )
+    
+    # Buscar usuário
+    user = db.query(models.User).filter(models.User.usuario == username).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    # Tentar deletar a réplica do usuário (se existir)
+    container_name = f"replica_{username}"
+    replica_deleted = False
+    
+    try:
+        container = docker_client.containers.get(container_name)
+        if container.status == "running":
+            container.stop()
+        container.remove()
+        replica_deleted = True
+    except docker.errors.NotFound:
+        # Usuário não tem réplica, tudo bem
+        pass
+    except Exception as e:
+        # Log do erro mas continua com a deleção do usuário
+        print(f"Erro ao deletar réplica do usuário {username}: {e}")
+    
+    # Deletar usuário do banco
+    db.delete(user)
+    db.commit()
+    
+    return {
+        "msg": f"Usuário {username} deletado com sucesso",
+        "replica_deleted": replica_deleted
+    }

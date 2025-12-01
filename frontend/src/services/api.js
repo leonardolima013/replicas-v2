@@ -61,6 +61,11 @@ export default {
     return response.data;
   },
 
+  async deleteUser(username) {
+    const response = await api.delete(`/users/${username}`);
+    return response.data;
+  },
+
   // Replicas
   async createReplica(password) {
     const response = await api.post("/replicas/create", {

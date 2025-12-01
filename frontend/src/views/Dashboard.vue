@@ -70,6 +70,18 @@ const loadUsers = async () => {
   }
 };
 
+// Computed: Usuários com informações de réplica
+const usersWithReplicas = computed(() => {
+  return users.value.map((user) => {
+    const replica = allReplicas.value.find((r) => r.username === user.usuario);
+    return {
+      ...user,
+      replica: replica || null,
+      hasReplica: !!replica,
+    };
+  });
+});
+
 const deleteReplica = async (username) => {
   if (
     !confirm(`Tem certeza que deseja deletar a réplica do usuário ${username}?`)
@@ -80,8 +92,30 @@ const deleteReplica = async (username) => {
     await api.deleteReplica(username);
     success.value = `Réplica de ${username} deletada com sucesso!`;
     await loadAllReplicas();
+    await loadUsers();
   } catch (err) {
     error.value = err.response?.data?.detail || "Erro ao deletar réplica";
+  }
+};
+
+const deleteUser = async (username) => {
+  if (
+    !confirm(
+      `ATENÇÃO: Isso irá deletar o usuário ${username} e sua réplica (se houver). Deseja continuar?`
+    )
+  )
+    return;
+
+  try {
+    const response = await api.deleteUser(username);
+    success.value = response.msg;
+    if (response.replica_deleted) {
+      success.value += " (Réplica também foi deletada)";
+    }
+    await loadUsers();
+    await loadAllReplicas();
+  } catch (err) {
+    error.value = err.response?.data?.detail || "Erro ao deletar usuário";
   }
 };
 
@@ -246,13 +280,25 @@ onMounted(async () => {
           </form>
         </div>
 
-        <!-- Lista de Réplicas Ativas -->
+        <!-- Usuários Ativos -->
         <div class="bg-white rounded-2xl shadow-lg p-6">
           <div class="flex justify-between items-center mb-6">
-            <h2 class="text-2xl font-bold text-gray-800">Réplicas Ativas</h2>
+            <div>
+              <h2 class="text-2xl font-bold text-gray-800">
+                Gerenciamento de Usuários e Réplicas
+              </h2>
+              <p class="text-sm text-gray-600 mt-1">
+                Visualize todos os usuários e suas réplicas em um único lugar
+              </p>
+            </div>
             <div class="flex gap-2">
               <button
-                @click="loadAllReplicas"
+                @click="
+                  () => {
+                    loadUsers();
+                    loadAllReplicas();
+                  }
+                "
                 class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
               >
                 Atualizar
@@ -261,16 +307,13 @@ onMounted(async () => {
                 @click="deleteAllReplicas"
                 class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
               >
-                Deletar Todas
+                Deletar Todas Réplicas
               </button>
             </div>
           </div>
 
-          <div
-            v-if="allReplicas.length === 0"
-            class="text-center py-8 text-gray-500"
-          >
-            Nenhuma réplica ativa no momento
+          <div v-if="users.length === 0" class="text-center py-8 text-gray-500">
+            Nenhum usuário cadastrado
           </div>
 
           <div v-else class="overflow-x-auto">
@@ -285,12 +328,17 @@ onMounted(async () => {
                   <th
                     class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Container
+                    Role
                   </th>
                   <th
                     class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Banco
+                    Status Réplica
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Banco de Dados
                   </th>
                   <th
                     class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -300,7 +348,7 @@ onMounted(async () => {
                   <th
                     class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                   >
-                    Status
+                    Status Container
                   </th>
                   <th
                     class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
@@ -310,38 +358,97 @@ onMounted(async () => {
                 </tr>
               </thead>
               <tbody class="bg-white divide-y divide-gray-200">
-                <tr v-for="replica in allReplicas" :key="replica.container_id">
+                <tr
+                  v-for="user in usersWithReplicas"
+                  :key="user.id"
+                  class="hover:bg-gray-50"
+                >
                   <td class="px-6 py-4 whitespace-nowrap font-medium">
-                    {{ replica.username }}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {{ replica.container_id }}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    {{ replica.database_name }}
-                  </td>
-                  <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    {{ replica.port }}
+                    {{ user.usuario }}
+                    <span
+                      v-if="user.usuario === username"
+                      class="ml-2 text-xs text-blue-600"
+                      >(Você)</span
+                    >
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
                     <span
                       :class="{
-                        'bg-green-100 text-green-800':
-                          replica.status === 'running',
-                        'bg-red-100 text-red-800': replica.status !== 'running',
+                        'bg-purple-100 text-purple-800': user.role === 'adm',
+                        'bg-blue-100 text-blue-800': user.role === 'dev',
+                      }"
+                      class="px-2 py-1 rounded-full text-xs font-semibold uppercase"
+                    >
+                      {{ user.role }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span
+                      :class="{
+                        'bg-green-100 text-green-800': user.hasReplica,
+                        'bg-gray-100 text-gray-600': !user.hasReplica,
                       }"
                       class="px-2 py-1 rounded-full text-xs font-semibold"
                     >
-                      {{ replica.status }}
+                      {{ user.hasReplica ? "Ativa" : "Sem réplica" }}
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <button
-                      @click="deleteReplica(replica.username)"
-                      class="text-red-600 hover:text-red-800 font-medium"
+                    <span v-if="user.replica" class="font-mono">{{
+                      user.replica.database_name
+                    }}</span>
+                    <span v-else class="text-gray-400">-</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <span v-if="user.replica" class="font-mono">{{
+                      user.replica.port
+                    }}</span>
+                    <span v-else class="text-gray-400">-</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <span
+                      v-if="user.replica"
+                      :class="{
+                        'bg-green-100 text-green-800':
+                          user.replica.status === 'running',
+                        'bg-red-100 text-red-800':
+                          user.replica.status !== 'running',
+                      }"
+                      class="px-2 py-1 rounded-full text-xs font-semibold"
                     >
-                      Deletar
-                    </button>
+                      {{ user.replica.status }}
+                    </span>
+                    <span v-else class="text-gray-400 text-xs">-</span>
+                  </td>
+                  <td class="px-6 py-4 whitespace-nowrap text-sm">
+                    <div class="flex gap-2">
+                      <!-- Deletar Réplica -->
+                      <button
+                        v-if="user.hasReplica"
+                        @click="deleteReplica(user.usuario)"
+                        class="text-orange-600 hover:text-orange-800 font-medium"
+                        title="Deletar apenas a réplica"
+                      >
+                        Deletar Réplica
+                      </button>
+
+                      <!-- Deletar Usuário -->
+                      <button
+                        v-if="user.usuario !== username"
+                        @click="deleteUser(user.usuario)"
+                        class="text-red-600 hover:text-red-800 font-medium"
+                        title="Deletar usuário e réplica"
+                      >
+                        Deletar Usuário
+                      </button>
+
+                      <span
+                        v-if="user.usuario === username"
+                        class="text-gray-400 text-xs"
+                      >
+                        (Você não pode se deletar)
+                      </span>
+                    </div>
                   </td>
                 </tr>
               </tbody>
