@@ -82,6 +82,8 @@ Abra seu navegador em: **http://localhost:8000**
 
 Ao iniciar pela primeira vez, crie um usuário ADM via API:
 
+python3 -m backend.scripts.create_admin
+
 ```bash
 curl -X 'POST' \
   'http://localhost:8000/users/' \
