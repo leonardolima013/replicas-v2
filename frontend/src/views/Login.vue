@@ -16,18 +16,23 @@ const handleLogin = async () => {
   try {
     const response = await api.login(username.value, password.value);
 
+    console.log("Login response:", response.data);
+
     // Salvar token e dados do usuário
-    localStorage.setItem("access_token", response.access_token);
+    localStorage.setItem("access_token", response.data.access_token);
     localStorage.setItem("username", username.value);
 
     // Decodificar token para pegar a role (simples parse do JWT)
-    const tokenParts = response.access_token.split(".");
+    const tokenParts = response.data.access_token.split(".");
     const payload = JSON.parse(atob(tokenParts[1]));
     localStorage.setItem("user_role", payload.role);
 
-    // Redirecionar para dashboard
-    router.push("/dashboard");
+    console.log("Token saved, redirecting to service-selector");
+
+    // Redirecionar para seleção de serviço
+    router.push("/service-selector");
   } catch (err) {
+    console.error("Login error:", err);
     error.value =
       err.response?.data?.detail ||
       "Erro ao fazer login. Verifique suas credenciais.";

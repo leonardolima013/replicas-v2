@@ -9,3 +9,5 @@ python-dotenv
 psycopg2-binary
 jose 
 docker
+duckdb
+pandas

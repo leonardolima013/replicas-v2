@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Login from "../views/Login.vue";
+import ServiceSelector from "../views/ServiceSelector.vue";
 import Dashboard from "../views/Dashboard.vue";
+import DataValidationTest from "../views/DataValidationTest.vue";
 
 const routes = [
   {
@@ -13,9 +15,21 @@ const routes = [
     component: Login,
   },
   {
+    path: "/service-selector",
+    name: "ServiceSelector",
+    component: ServiceSelector,
+    meta: { requiresAuth: true },
+  },
+  {
     path: "/dashboard",
     name: "Dashboard",
     component: Dashboard,
+    meta: { requiresAuth: true },
+  },
+  {
+    path: "/data-validation-test",
+    name: "DataValidationTest",
+    component: DataValidationTest,
     meta: { requiresAuth: true },
   },
 ];
@@ -32,7 +46,7 @@ router.beforeEach((to, from, next) => {
   if (to.meta.requiresAuth && !token) {
     next("/login");
   } else if (to.path === "/login" && token) {
-    next("/dashboard");
+    next("/service-selector");
   } else {
     next();
   }
