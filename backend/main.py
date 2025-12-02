@@ -6,6 +6,7 @@ from pathlib import Path
 from backend.core import models, database
 from backend.routers import auth, users
 from backend.services.replicas import router as replicas_router
+from backend.services.data_validation import router as dv_router
 
 models.Base.metadata.create_all(bind=database.engine)
 
@@ -15,6 +16,7 @@ app = FastAPI(title="Replicas-v2")
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(replicas_router.router)
+app.include_router(dv_router.router)
 
 # Servir arquivos estáticos do frontend (após build)
 frontend_dist = Path(__file__).parent.parent / "frontend" / "dist"
@@ -31,7 +33,7 @@ if frontend_dist.exists():
         Isso permite que o Vue Router funcione corretamente.
         """
         # Se for uma rota da API, não serve o frontend
-        if full_path.startswith(("auth/", "users/", "replicas/", "docs", "redoc", "openapi.json")):
+        if full_path.startswith(("auth/", "users/", "replicas/", "validation/", "docs", "redoc", "openapi.json")):
             return {"detail": "Not Found"}
         
         # Para todas as outras rotas, serve o index.html
