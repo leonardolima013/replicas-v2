@@ -6,9 +6,9 @@ WORKDIR /frontend
 
 # Copiar arquivos de configuração do frontend
 COPY frontend/package*.json ./
-COPY frontend/vite.config.js ./
-COPY frontend/tailwind.config.js ./
+COPY frontend/vite.config.ts ./
 COPY frontend/postcss.config.js ./
+COPY frontend/tsconfig*.json ./
 COPY frontend/index.html ./
 
 # Instalar dependências
