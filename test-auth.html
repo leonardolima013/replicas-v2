@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Teste de Autenticação</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      .test-section {
+        margin: 20px 0;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      button {
+        background: #0ea5e9;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #0284c7;
+      }
+      .output {
+        background: #f3f4f6;
+        padding: 10px;
+        border-radius: 5px;
+        margin-top: 10px;
+        white-space: pre-wrap;
+        font-family: monospace;
+      }
+      .success {
+        color: #059669;
+      }
+      .error {
+        color: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🧪 Teste de Autenticação - Replicas V2</h1>
+
+    <div class="test-section">
+      <h2>1. Teste de Login (API Direta)</h2>
+      <button onclick="testLogin('admin', 'admin123')">Login Admin</button>
+      <button onclick="testLogin('dev', 'dev123')">Login Dev</button>
+      <div id="login-output" class="output"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>2. Verificar LocalStorage</h2>
+      <button onclick="checkStorage()">Ver localStorage</button>
+      <button onclick="clearStorage()">Limpar localStorage</button>
+      <div id="storage-output" class="output"></div>
+    </div>
+
+    <div class="test-section">
+      <h2>3. Teste de Requisição Autenticada</h2>
+      <button onclick="testAuthRequest()">Buscar Projetos</button>
+      <div id="auth-output" class="output"></div>
+    </div>
+
+    <script>
+      const API_URL = "http://localhost:8000";
+
+      async function testLogin(username, password) {
+        const output = document.getElementById("login-output");
+        output.innerHTML = `Tentando login: ${username}...\n`;
+
+        try {
+          const formData = new URLSearchParams();
+          formData.append("username", username);
+          formData.append("password", password);
+
+          const response = await fetch(`${API_URL}/auth/login`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            output.innerHTML += `<span class="success">✅ Login bem-sucedido!</span>\n`;
+            output.innerHTML += `Usuario: ${data.usuario}\n`;
+            output.innerHTML += `Role: ${data.role}\n`;
+            output.innerHTML += `Token: ${data.access_token.substring(
+              0,
+              50
+            )}...\n`;
+
+            // Salvar no localStorage
+            localStorage.setItem("access_token", data.access_token);
+            localStorage.setItem(
+              "user",
+              JSON.stringify({ usuario: data.usuario, role: data.role })
+            );
+            output.innerHTML += `\n<span class="success">✅ Dados salvos no localStorage</span>\n`;
+          } else {
+            output.innerHTML += `<span class="error">❌ Erro: ${data.detail}</span>\n`;
+          }
+        } catch (error) {
+          output.innerHTML += `<span class="error">❌ Erro: ${error.message}</span>\n`;
+        }
+      }
+
+      function checkStorage() {
+        const output = document.getElementById("storage-output");
+        const token = localStorage.getItem("access_token");
+        const user = localStorage.getItem("user");
+
+        if (token && user) {
+          output.innerHTML = `<span class="success">✅ Dados encontrados:</span>\n`;
+          output.innerHTML += `Token: ${token.substring(0, 50)}...\n`;
+          output.innerHTML += `User: ${user}\n`;
+        } else {
+          output.innerHTML = `<span class="error">❌ Nenhum dado no localStorage</span>\n`;
+        }
+      }
+
+      function clearStorage() {
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("user");
+        document.getElementById(
+          "storage-output"
+        ).innerHTML = `<span class="success">✅ localStorage limpo</span>\n`;
+      }
+
+      async function testAuthRequest() {
+        const output = document.getElementById("auth-output");
+        const token = localStorage.getItem("access_token");
+
+        if (!token) {
+          output.innerHTML = `<span class="error">❌ Faça login primeiro!</span>\n`;
+          return;
+        }
+
+        output.innerHTML = `Buscando projetos...\n`;
+
+        try {
+          const response = await fetch(`${API_URL}/validation/projects`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            output.innerHTML += `<span class="success">✅ Requisição autenticada funcionou!</span>\n`;
+            output.innerHTML += `Projetos encontrados: ${data.length}\n`;
+            output.innerHTML += JSON.stringify(data, null, 2);
+          } else {
+            output.innerHTML += `<span class="error">❌ Erro ${
+              response.status
+            }: ${JSON.stringify(data)}</span>\n`;
+          }
+        } catch (error) {
+          output.innerHTML += `<span class="error">❌ Erro: ${error.message}</span>\n`;
+        }
+      }
+    </script>
+  </body>
+</html>

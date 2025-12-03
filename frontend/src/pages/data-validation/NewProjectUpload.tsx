@@ -1,12 +1,21 @@
-import { Upload, ArrowLeft, FileCheck } from "lucide-react";
+import {
+  Upload,
+  ArrowLeft,
+  FileCheck,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useState, DragEvent, ChangeEvent } from "react";
+import { useState, type DragEvent, type ChangeEvent } from "react";
+import { uploadCSV } from "../../services/validationService";
 
 export default function NewProjectUpload() {
   const navigate = useNavigate();
   const [projectName, setProjectName] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -52,18 +61,28 @@ export default function NewProjectUpload() {
     }
   };
 
-  const handleStartTreatment = () => {
+  const handleStartTreatment = async () => {
     if (!projectName || !selectedFile) {
       alert("Por favor, preencha o nome do projeto e selecione um arquivo");
       return;
     }
 
-    console.log("Iniciando tratamento:", {
-      projectName,
-      fileName: selectedFile.name,
-    });
-    // Redirecionar para workspace com ID mockado
-    navigate("/validation/123");
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const response = await uploadCSV(selectedFile, projectName);
+      console.log("Upload bem-sucedido:", response);
+      // Redirecionar para o workspace com o ID real do projeto
+      navigate(`/validation/${response.id}`);
+    } catch (err: any) {
+      console.error("Erro ao fazer upload:", err);
+      setError(
+        err.message || "Erro ao fazer upload do arquivo. Tente novamente."
+      );
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -93,6 +112,25 @@ export default function NewProjectUpload() {
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Mensagem de Erro */}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 rounded-card p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-900 mb-1">
+                Erro no Upload
+              </h3>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-700 font-medium text-sm"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
+
         <div className="card space-y-6">
           {/* Nome do Projeto */}
           <div>
@@ -181,10 +219,17 @@ export default function NewProjectUpload() {
             </Link>
             <button
               onClick={handleStartTreatment}
-              disabled={!projectName || !selectedFile}
-              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!projectName || !selectedFile || isUploading}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Iniciar Tratamento
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Enviando arquivo...
+                </>
+              ) : (
+                "Iniciar Tratamento"
+              )}
             </button>
           </div>
         </div>

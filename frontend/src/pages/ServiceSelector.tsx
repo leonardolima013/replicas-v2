@@ -1,8 +1,7 @@
-import { Database, FileCheck, Users } from "lucide-react";
+import { Database, FileCheck, Users, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-// Mock de role do usuário - mude para 'dev' ou 'adm' para testar
-const userRole: "dev" | "adm" = "adm";
+import { getCurrentUser } from "../services/authService";
+import { useEffect, useState } from "react";
 
 interface Service {
   id: string;
@@ -35,13 +34,29 @@ const services: Service[] = [
     title: "Gestão de Usuários",
     description: "Administração de usuários e permissões",
     icon: <Users className="w-16 h-16 text-primary-500" />,
-    path: "/users",
+    path: "/admin/users",
+    allowedRoles: ["adm"],
+  },
+  {
+    id: "validation-approval",
+    title: "Aprovação de Validações",
+    description: "Revisar e aprovar projetos de validação de dados",
+    icon: <ShieldCheck className="w-16 h-16 text-primary-500" />,
+    path: "/admin/validation",
     allowedRoles: ["adm"],
   },
 ];
 
 export default function ServiceSelector() {
   const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const userRole: "dev" | "adm" = (currentUser?.role as "dev" | "adm") || "dev";
+
+  // Atualizar usuário quando componente montar
+  useEffect(() => {
+    const user = getCurrentUser();
+    setCurrentUser(user);
+  }, []);
 
   // Filtrar serviços baseado no role do usuário
   const availableServices = services.filter((service) =>
@@ -68,12 +83,20 @@ export default function ServiceSelector() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">
-                Perfil:{" "}
-                <span className="font-semibold text-primary-600 uppercase">
-                  {userRole}
-                </span>
-              </span>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">
+                  Usuário:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {currentUser?.usuario || "Anônimo"}
+                  </span>
+                </p>
+                <p className="text-xs text-gray-500">
+                  Perfil:{" "}
+                  <span className="font-semibold text-primary-600 uppercase">
+                    {userRole === "adm" ? "Administrador" : "Desenvolvedor"}
+                  </span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
