@@ -1,15 +1,39 @@
 import { useState } from "react";
-import { User, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { User, Lock, AlertCircle, Loader2 } from "lucide-react";
+import * as authService from "../services/authService";
 
 export default function Login() {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Dados de login:", formData);
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      // Chamar serviço de autenticação
+      const user = await authService.login(
+        formData.username,
+        formData.password
+      );
+
+      console.log("Login bem-sucedido:", user);
+
+      // Redirecionar para o dashboard de serviços
+      navigate("/services");
+    } catch (err: any) {
+      // Exibir mensagem de erro
+      setError(err.message || "Erro ao fazer login. Tente novamente.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -17,6 +41,8 @@ export default function Login() {
       ...formData,
       [e.target.name]: e.target.value,
     });
+    // Limpar erro ao digitar
+    if (error) setError(null);
   };
 
   return (
@@ -32,6 +58,14 @@ export default function Login() {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Mensagem de Erro */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-button p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          )}
+
           {/* Username/Email Input */}
           <div className="space-y-2">
             <label
@@ -83,8 +117,19 @@ export default function Login() {
           </div>
 
           {/* Submit Button */}
-          <button type="submit" className="btn-primary w-full">
-            Entrar
+          <button
+            type="submit"
+            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Entrando...
+              </span>
+            ) : (
+              "Entrar"
+            )}
           </button>
         </form>
 

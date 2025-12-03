@@ -1,26 +1,35 @@
-import { Plus, ArrowRight, Loader2, AlertCircle, Trash2 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  FileCheck,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  ArrowLeft,
+  Download,
+} from "lucide-react";
 import * as validationService from "../../services/validationService";
-import { getCurrentUser } from "../../services/authService";
 
-export default function DevDashboard() {
+export default function AdminValidationDashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<validationService.Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const currentUser = getCurrentUser();
 
   useEffect(() => {
-    fetchProjects();
+    fetchPendingProjects();
   }, []);
 
-  const fetchProjects = async () => {
+  const fetchPendingProjects = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await validationService.getProjects();
-      setProjects(response.projects);
+      // Filtrar apenas projetos com status PENDING
+      const pendingProjects = response.projects.filter(
+        (p) => p.status === "PENDING"
+      );
+      setProjects(pendingProjects);
     } catch (err: any) {
       setError(err.message || "Erro ao carregar projetos");
     } finally {
@@ -28,47 +37,34 @@ export default function DevDashboard() {
     }
   };
 
-  const handleDelete = async (projectId: string, fileName: string) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o projeto "${fileName}"?`)) {
-      return;
-    }
-
+  const handleDownloadCSV = async (projectId: string, filename: string) => {
     try {
-      await validationService.deleteProject(projectId);
-      // Remover projeto da lista localmente
-      setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    } catch (err: any) {
-      alert(err.message || "Erro ao excluir projeto");
-    }
-  };
+      // Fazer download do CSV
+      const response = await fetch(
+        `http://localhost:8000/validation/${projectId}/download`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          },
+        }
+      );
 
-  const getStatusBadge = (status: string) => {
-    if (status === "DRAFT") {
-      return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          Em Andamento
-        </span>
-      );
+      if (!response.ok) {
+        throw new Error("Erro ao baixar arquivo");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${filename.replace(".csv", "")}_processed.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err: any) {
+      alert(err.message || "Erro ao baixar CSV");
     }
-    if (status === "PENDING") {
-      return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          Aguardando Aprovação
-        </span>
-      );
-    }
-    if (status === "DONE") {
-      return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-          Publicado
-        </span>
-      );
-    }
-    return (
-      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-        {status}
-      </span>
-    );
   };
 
   const formatDate = (dateString: string) => {
@@ -77,6 +73,8 @@ export default function DevDashboard() {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -85,22 +83,23 @@ export default function DevDashboard() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 shadow-soft">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link
+              to="/services"
+              className="btn-secondary flex items-center gap-2"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Voltar
+            </Link>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 tracking-wide">
-                Meus Projetos de Validação
+              <h1 className="text-3xl font-bold text-gray-900 tracking-wide flex items-center gap-3">
+                <FileCheck className="w-8 h-8 text-yellow-600" />
+                Validação - Aprovação de Projetos
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                Gerencie e limpe suas bases de dados
+                Projetos aguardando revisão e aprovação
               </p>
             </div>
-            <Link
-              to="/validation/new"
-              className="btn-primary flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Novo Projeto
-            </Link>
           </div>
         </div>
       </header>
@@ -126,7 +125,7 @@ export default function DevDashboard() {
                 </p>
                 <p className="text-sm text-red-600 mt-1">{error}</p>
                 <button
-                  onClick={fetchProjects}
+                  onClick={fetchPendingProjects}
                   className="btn-secondary mt-4 text-sm"
                 >
                   Tentar Novamente
@@ -140,21 +139,14 @@ export default function DevDashboard() {
         {!loading && !error && projects.length === 0 && (
           <div className="card text-center py-16">
             <div className="bg-gray-100 rounded-full p-8 w-32 h-32 mx-auto mb-6 flex items-center justify-center">
-              <Plus className="w-16 h-16 text-gray-300" />
+              <FileCheck className="w-16 h-16 text-gray-300" />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-3">
-              Nenhum projeto encontrado
+              Nenhum projeto pendente
             </h3>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Comece criando um novo projeto de validação de dados
+              Não há projetos aguardando aprovação no momento
             </p>
-            <Link
-              to="/validation/new"
-              className="btn-primary inline-flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Novo Projeto
-            </Link>
           </div>
         )}
 
@@ -169,10 +161,10 @@ export default function DevDashboard() {
                       Nome do Arquivo
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Data de Upload
+                      Proprietário
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Data de Envio
                     </th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Ações
@@ -197,27 +189,36 @@ export default function DevDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-600">
-                          {formatDate(project.created_at)}
+                          {project.owner_username || "N/A"}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(project.status)}
+                        <div className="text-sm text-gray-600">
+                          {formatDate(project.created_at)}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => navigate(`/validation/${project.id}`)}
+                            onClick={() =>
+                              handleDownloadCSV(
+                                project.id,
+                                project.original_filename
+                              )
+                            }
                             className="btn-secondary text-sm inline-flex items-center gap-2"
                           >
-                            Continuar Trabalho
-                            <ArrowRight className="w-4 h-4" />
+                            <Download className="w-4 h-4" />
+                            Baixar CSV
                           </button>
                           <button
-                            onClick={() => handleDelete(project.id, project.original_filename)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-button transition-colors"
-                            title="Excluir projeto"
+                            onClick={() =>
+                              navigate(`/admin/validation/${project.id}`)
+                            }
+                            className="btn-primary text-sm inline-flex items-center gap-2"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            Revisar
+                            <ArrowRight className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

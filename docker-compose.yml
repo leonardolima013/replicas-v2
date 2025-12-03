@@ -29,6 +29,7 @@ services:
     container_name: replicas-v2_app
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./backend:/app/backend
     ports:
       - "8000:8000"
     environment:

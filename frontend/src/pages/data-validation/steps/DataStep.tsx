@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import {
-  Tag,
   Barcode,
   Scale,
   Ruler,
@@ -8,10 +8,29 @@ import {
   CheckCircle2,
   Loader2,
   Code,
+  Type,
+  Hash,
+  FileText,
 } from "lucide-react";
+import {
+  getDiagnosis,
+  fixNCM,
+  fixBarcodes,
+  fixWeights,
+  fixDimensions,
+  fixNullStrings,
+  fixUppercase,
+  fixNullNumerics,
+} from "../../../services/validationService";
 
 // Interface baseada no schema TreatmentDiagnosisResponse do backend
 interface DiagnosisData {
+  project_id?: string;
+  // Básicos (arrays de nomes de colunas)
+  uppercase_issues?: string[];
+  null_string_issues?: string[];
+  null_numeric_issues?: string[];
+  // Avançados (contadores)
   brand_issues: number;
   ncm_issues: number;
   barcode_issues: number;
@@ -37,18 +56,48 @@ interface TreatmentCard {
   title: string;
   description: string;
   icon: React.ReactNode;
-  issuesKey: keyof DiagnosisData;
-  fixEndpoint: string; // Endpoint da API que será chamado
+  issuesKey:
+    | "uppercase_issues"
+    | "null_string_issues"
+    | "null_numeric_issues"
+    | "brand_issues"
+    | "ncm_issues"
+    | "barcode_issues"
+    | "weight_issues"
+    | "dimension_issues"
+    | "search_ref_issues"
+    | "manufacturer_ref_issues";
+  fixFunction: (projectId: string) => Promise<any>;
+  isArrayIssue?: boolean; // Para diferenciar arrays de números
 }
 
 const treatmentGroups: TreatmentCard[] = [
   {
-    id: "brands",
-    title: "Validação de Marcas",
-    description: "Marcas com comprimento inválido ou caracteres especiais",
-    icon: <Tag className="w-6 h-6" />,
-    issuesKey: "brand_issues",
-    fixEndpoint: "/treatments/fix-codes",
+    id: "null_strings",
+    title: "Valores Nulos em Strings",
+    description: "Colunas de texto com valores nulos ou 'nan'",
+    icon: <FileText className="w-6 h-6" />,
+    issuesKey: "null_string_issues",
+    fixFunction: fixNullStrings,
+    isArrayIssue: true,
+  },
+  {
+    id: "uppercase",
+    title: "Conversão para MAIÚSCULAS",
+    description: "Colunas de texto com valores que não estão em UPPERCASE",
+    icon: <Type className="w-6 h-6" />,
+    issuesKey: "uppercase_issues",
+    fixFunction: fixUppercase,
+    isArrayIssue: true,
+  },
+  {
+    id: "null_numerics",
+    title: "Valores Nulos em Números",
+    description: "Colunas numéricas com valores nulos",
+    icon: <Hash className="w-6 h-6" />,
+    issuesKey: "null_numeric_issues",
+    fixFunction: fixNullNumerics,
+    isArrayIssue: true,
   },
   {
     id: "ncm",
@@ -56,7 +105,7 @@ const treatmentGroups: TreatmentCard[] = [
     description: "Códigos NCM que não possuem exatamente 8 dígitos",
     icon: <Code className="w-6 h-6" />,
     issuesKey: "ncm_issues",
-    fixEndpoint: "/treatments/fix-ncm",
+    fixFunction: fixNCM,
   },
   {
     id: "barcode",
@@ -65,7 +114,7 @@ const treatmentGroups: TreatmentCard[] = [
       "Barcodes com formato inválido (esperado: 8, 12 ou 13 dígitos)",
     icon: <Barcode className="w-6 h-6" />,
     issuesKey: "barcode_issues",
-    fixEndpoint: "/treatments/fix-barcode",
+    fixFunction: fixBarcodes,
   },
   {
     id: "weights",
@@ -73,7 +122,7 @@ const treatmentGroups: TreatmentCard[] = [
     description: "Peso bruto menor que líquido ou valores negativos",
     icon: <Scale className="w-6 h-6" />,
     issuesKey: "weight_issues",
-    fixEndpoint: "/treatments/fix-negative-weights",
+    fixFunction: fixWeights,
   },
   {
     id: "dimensions",
@@ -81,53 +130,119 @@ const treatmentGroups: TreatmentCard[] = [
     description: "Dimensões inválidas (valores <= 0 ou >= 1000 cm)",
     icon: <Ruler className="w-6 h-6" />,
     issuesKey: "dimension_issues",
-    fixEndpoint: "/treatments/fix-codes",
-  },
-  {
-    id: "search_ref",
-    title: "Código de Referência (Search Ref)",
-    description: "Referências com caracteres não alfanuméricos",
-    icon: <Code className="w-6 h-6" />,
-    issuesKey: "search_ref_issues",
-    fixEndpoint: "/treatments/fix-codes",
-  },
-  {
-    id: "manufacturer_ref",
-    title: "Código do Fabricante",
-    description: "Códigos do fabricante com formato inválido",
-    icon: <Code className="w-6 h-6" />,
-    issuesKey: "manufacturer_ref_issues",
-    fixEndpoint: "/treatments/fix-codes",
+    fixFunction: fixDimensions,
   },
 ];
 
 export default function DataStep() {
-  const [diagnosis, setDiagnosis] = useState<DiagnosisData>(mockDiagnosis);
+  const { projectId } = useParams<{ projectId: string }>();
+  const [diagnosis, setDiagnosis] = useState<DiagnosisData | null>(null);
+  const [loadingDiagnosis, setLoadingDiagnosis] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>(
     {}
   );
+  const [successMessages, setSuccessMessages] = useState<
+    Record<string, string>
+  >({});
 
-  const handleFixIssues = async (
-    cardId: string,
-    issuesKey: keyof DiagnosisData
-  ) => {
-    // Ativar loading para este card
-    setLoadingStates((prev) => ({ ...prev, [cardId]: true }));
+  useEffect(() => {
+    fetchDiagnosis();
+  }, [projectId]);
 
-    // Simular chamada à API (2 segundos)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+  const fetchDiagnosis = async () => {
+    if (!projectId) return;
 
-    // Zerar os erros deste grupo (simular sucesso da correção)
-    setDiagnosis((prev) => ({
-      ...prev,
-      [issuesKey]: 0,
-    }));
+    setLoadingDiagnosis(true);
+    setError(null);
 
-    // Desativar loading
-    setLoadingStates((prev) => ({ ...prev, [cardId]: false }));
-
-    console.log(`Correção aplicada para ${cardId}`);
+    try {
+      const data = await getDiagnosis(projectId);
+      setDiagnosis(data);
+    } catch (err: any) {
+      console.error("Erro ao carregar diagnóstico:", err);
+      setError(err.message || "Erro ao carregar diagnóstico. Tente novamente.");
+    } finally {
+      setLoadingDiagnosis(false);
+    }
   };
+
+  const handleFixIssues = async (card: TreatmentCard) => {
+    if (!projectId) return;
+
+    // Ativar loading para este card
+    setLoadingStates((prev) => ({ ...prev, [card.id]: true }));
+    setSuccessMessages((prev) => {
+      const updated = { ...prev };
+      delete updated[card.id];
+      return updated;
+    });
+
+    try {
+      const response = await card.fixFunction(projectId);
+      console.log(`Correção aplicada para ${card.id}:`, response);
+
+      // Mostrar mensagem de sucesso
+      setSuccessMessages((prev) => ({
+        ...prev,
+        [card.id]: `${
+          response.rows_affected
+        } linhas corrigidas! Colunas afetadas: ${response.columns_affected.join(
+          ", "
+        )}`,
+      }));
+
+      // Recarregar diagnóstico para atualizar contadores
+      await fetchDiagnosis();
+    } catch (err: any) {
+      console.error(`Erro ao corrigir ${card.id}:`, err);
+      alert(`Erro ao aplicar correções: ${err.message}`);
+    } finally {
+      // Desativar loading
+      setLoadingStates((prev) => ({ ...prev, [card.id]: false }));
+    }
+  };
+
+  // Loading State
+  if (loadingDiagnosis) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
+        <Loader2 className="w-12 h-12 text-primary-500 animate-spin mb-4" />
+        <p className="text-gray-600">Carregando diagnóstico...</p>
+      </div>
+    );
+  }
+
+  // Error State
+  if (error) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
+        <div className="bg-red-50 border border-red-200 rounded-card p-6 max-w-md">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-red-900 mb-1">
+                Erro ao Carregar Diagnóstico
+              </h3>
+              <p className="text-sm text-red-700 mb-4">{error}</p>
+              <button onClick={fetchDiagnosis} className="btn-primary text-sm">
+                Tentar Novamente
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty State
+  if (!diagnosis) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
+        <p className="text-gray-600">Nenhum diagnóstico disponível.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -143,7 +258,10 @@ export default function DataStep() {
       {/* Grid de Cards de Tratamento */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {treatmentGroups.map((group) => {
-          const issuesCount = diagnosis[group.issuesKey];
+          const rawValue = diagnosis[group.issuesKey];
+          const issuesCount = group.isArrayIssue 
+            ? (rawValue as string[]).length 
+            : (rawValue as number);
           const isLoading = loadingStates[group.id];
           const hasIssues = issuesCount > 0;
 
@@ -186,12 +304,28 @@ export default function DataStep() {
                 {hasIssues ? (
                   <div className="flex items-center gap-2 text-red-700">
                     <AlertCircle className="w-5 h-5" />
-                    <span className="font-medium text-sm">
-                      {issuesCount}{" "}
-                      {issuesCount === 1
-                        ? "inconsistência encontrada"
-                        : "inconsistências encontradas"}
-                    </span>
+                    <div className="text-sm">
+                      {group.isArrayIssue ? (
+                        <>
+                          <div className="font-medium mb-1">
+                            {issuesCount}{" "}
+                            {issuesCount === 1
+                              ? "coluna com problemas"
+                              : "colunas com problemas"}
+                          </div>
+                          <div className="text-xs text-red-600">
+                            {(rawValue as string[]).join(", ")}
+                          </div>
+                        </>
+                      ) : (
+                        <span className="font-medium">
+                          {issuesCount}{" "}
+                          {issuesCount === 1
+                            ? "inconsistência encontrada"
+                            : "inconsistências encontradas"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 text-green-700">
@@ -201,10 +335,17 @@ export default function DataStep() {
                 )}
               </div>
 
+              {/* Mensagem de Sucesso */}
+              {successMessages[group.id] && (
+                <div className="mb-4 text-sm text-green-700 bg-green-100 rounded px-3 py-2">
+                  {successMessages[group.id]}
+                </div>
+              )}
+
               {/* Botão de Ação (apenas se houver erros) */}
               {hasIssues && (
                 <button
-                  onClick={() => handleFixIssues(group.id, group.issuesKey)}
+                  onClick={() => handleFixIssues(group)}
                   disabled={isLoading}
                   className="
                     w-full bg-white border border-gray-300 rounded-button 
@@ -242,7 +383,13 @@ export default function DataStep() {
           </div>
           <div className="text-right">
             <div className="text-3xl font-bold text-gray-900">
-              {Object.values(diagnosis).reduce((acc, val) => acc + val, 0)}
+              {diagnosis.brand_issues +
+                diagnosis.ncm_issues +
+                diagnosis.barcode_issues +
+                diagnosis.weight_issues +
+                diagnosis.dimension_issues +
+                diagnosis.search_ref_issues +
+                diagnosis.manufacturer_ref_issues}
             </div>
             <div className="text-sm text-gray-500">problemas detectados</div>
           </div>
