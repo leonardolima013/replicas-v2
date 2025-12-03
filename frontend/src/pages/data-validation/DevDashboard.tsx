@@ -29,7 +29,9 @@ export default function DevDashboard() {
   };
 
   const handleDelete = async (projectId: string, fileName: string) => {
-    if (!window.confirm(`Tem certeza que deseja excluir o projeto "${fileName}"?`)) {
+    if (
+      !window.confirm(`Tem certeza que deseja excluir o projeto "${fileName}"?`)
+    ) {
       return;
     }
 
@@ -206,14 +208,21 @@ export default function DevDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
-                            onClick={() => navigate(`/validation/${project.id}`)}
+                            onClick={() =>
+                              navigate(`/validation/${project.id}`)
+                            }
                             className="btn-secondary text-sm inline-flex items-center gap-2"
                           >
                             Continuar Trabalho
                             <ArrowRight className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDelete(project.id, project.original_filename)}
+                            onClick={() =>
+                              handleDelete(
+                                project.id,
+                                project.original_filename
+                              )
+                            }
                             className="p-2 text-red-600 hover:bg-red-50 rounded-button transition-colors"
                             title="Excluir projeto"
                           >
