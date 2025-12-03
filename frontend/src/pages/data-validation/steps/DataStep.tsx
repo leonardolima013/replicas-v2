@@ -259,8 +259,8 @@ export default function DataStep() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {treatmentGroups.map((group) => {
           const rawValue = diagnosis[group.issuesKey];
-          const issuesCount = group.isArrayIssue 
-            ? (rawValue as string[]).length 
+          const issuesCount = group.isArrayIssue
+            ? (rawValue as string[]).length
             : (rawValue as number);
           const isLoading = loadingStates[group.id];
           const hasIssues = issuesCount > 0;
