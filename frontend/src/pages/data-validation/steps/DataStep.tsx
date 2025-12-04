@@ -211,8 +211,10 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
   if (loadingDiagnosis) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="w-12 h-12 text-primary-500 animate-spin mb-4" />
-        <p className="text-gray-600">Carregando diagnóstico...</p>
+        <Loader2 className="w-12 h-12 text-primary-500 dark:text-primary-400 animate-spin mb-4" />
+        <p className="text-gray-600 dark:text-gray-400">
+          Carregando diagnóstico...
+        </p>
       </div>
     );
   }
@@ -221,14 +223,16 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
   if (error) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <div className="bg-red-50 border border-red-200 rounded-card p-6 max-w-md">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-card p-6 max-w-md">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-red-900 mb-1">
+              <h3 className="font-semibold text-red-900 dark:text-red-300 mb-1">
                 Erro ao Carregar Diagnóstico
               </h3>
-              <p className="text-sm text-red-700 mb-4">{error}</p>
+              <p className="text-sm text-red-700 dark:text-red-400 mb-4">
+                {error}
+              </p>
               <button onClick={fetchDiagnosis} className="btn-primary text-sm">
                 Tentar Novamente
               </button>
@@ -243,7 +247,9 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
   if (!diagnosis) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <p className="text-gray-600">Nenhum diagnóstico disponível.</p>
+        <p className="text-gray-600 dark:text-gray-400">
+          Nenhum diagnóstico disponível.
+        </p>
       </div>
     );
   }
@@ -251,10 +257,10 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
           Tratamento de Dados
         </h2>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Diagnóstico de qualidade dos dados e correções automatizadas
         </p>
       </div>
@@ -276,8 +282,8 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
                 rounded-card border-2 p-6 transition-all duration-200
                 ${
                   hasIssues
-                    ? "bg-red-50 border-red-200"
-                    : "bg-green-50 border-green-200"
+                    ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                    : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
                 }
               `}
             >
@@ -288,25 +294,27 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
                   p-2 rounded-lg
                   ${
                     hasIssues
-                      ? "bg-red-100 text-red-600"
-                      : "bg-green-100 text-green-600"
+                      ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                      : "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
                   }
                 `}
                 >
                   {group.icon}
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
                     {group.title}
                   </h3>
-                  <p className="text-xs text-gray-600">{group.description}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {group.description}
+                  </p>
                 </div>
               </div>
 
               {/* Status */}
               <div className="mb-4">
                 {hasIssues ? (
-                  <div className="flex items-center gap-2 text-red-700">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                     <AlertCircle className="w-5 h-5" />
                     <div className="text-sm">
                       {group.isArrayIssue ? (
@@ -317,7 +325,7 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
                               ? "coluna com problemas"
                               : "colunas com problemas"}
                           </div>
-                          <div className="text-xs text-red-600">
+                          <div className="text-xs text-red-600 dark:text-red-400">
                             {(rawValue as string[]).join(", ")}
                           </div>
                         </>
@@ -332,7 +340,7 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-green-700">
+                  <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
                     <CheckCircle2 className="w-5 h-5" />
                     <span className="font-medium text-sm">Tudo certo</span>
                   </div>
@@ -341,7 +349,7 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
 
               {/* Mensagem de Sucesso */}
               {successMessages[group.id] && (
-                <div className="mb-4 text-sm text-green-700 bg-green-100 rounded px-3 py-2">
+                <div className="mb-4 text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 rounded px-3 py-2">
                   {successMessages[group.id]}
                 </div>
               )}

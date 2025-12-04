@@ -33,3 +33,5 @@ backend/**/__pycache__/
 # Ignorar sistema
 .DS_Store
 Thumbs.db
+
+.sql

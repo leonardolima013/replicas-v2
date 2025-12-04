@@ -46,23 +46,23 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="card max-w-md w-full p-8 space-y-6">
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-card max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900 tracking-wide">
+          <h1 className="text-3xl font-bold text-white tracking-wide">
             Bem-vindo
           </h1>
-          <p className="text-gray-500 text-sm">Faça login para continuar</p>
+          <p className="text-zinc-500 text-sm">Faça login para continuar</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Mensagem de Erro */}
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-button p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-button p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
 
@@ -70,13 +70,13 @@ export default function Login() {
           <div className="space-y-2">
             <label
               htmlFor="username"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-zinc-300"
             >
               Usuário/Email
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-gray-400" />
+                <User className="h-5 w-5 text-zinc-500" />
               </div>
               <input
                 id="username"
@@ -95,13 +95,13 @@ export default function Login() {
           <div className="space-y-2">
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-zinc-300"
             >
               Senha
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-gray-400" />
+                <Lock className="h-5 w-5 text-zinc-500" />
               </div>
               <input
                 id="password"
@@ -137,7 +137,7 @@ export default function Login() {
         <div className="text-center">
           <a
             href="#"
-            className="text-sm text-sky-500 hover:text-sky-600 transition-colors"
+            className="text-sm text-sky-400 hover:text-sky-300 transition-colors"
           >
             Esqueceu sua senha?
           </a>

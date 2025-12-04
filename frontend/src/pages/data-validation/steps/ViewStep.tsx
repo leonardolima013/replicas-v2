@@ -59,8 +59,8 @@ export default function ViewStep() {
   if (loading) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="w-12 h-12 text-primary-500 animate-spin mb-4" />
-        <p className="text-gray-600">Carregando dados...</p>
+        <Loader2 className="w-12 h-12 text-primary-500 dark:text-primary-400 animate-spin mb-4" />
+        <p className="text-gray-600 dark:text-gray-400">Carregando dados...</p>
       </div>
     );
   }
@@ -69,14 +69,16 @@ export default function ViewStep() {
   if (error) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <div className="bg-red-50 border border-red-200 rounded-card p-6 max-w-md">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-card p-6 max-w-md">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-red-900 mb-1">
+              <h3 className="font-semibold text-red-900 dark:text-red-300 mb-1">
                 Erro ao Carregar Dados
               </h3>
-              <p className="text-sm text-red-700 mb-4">{error}</p>
+              <p className="text-sm text-red-700 dark:text-red-400 mb-4">
+                {error}
+              </p>
               <button
                 onClick={() => fetchPreview(currentPage)}
                 className="btn-primary text-sm"
@@ -94,7 +96,7 @@ export default function ViewStep() {
   if (!preview || preview.rows.length === 0) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Nenhum dado disponível para visualização.
         </p>
       </div>
@@ -108,10 +110,10 @@ export default function ViewStep() {
       {/* Header com Info */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
             Visualização dos Dados
           </h2>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             Total: {preview.total_rows.toLocaleString("pt-BR")} linhas |
             Mostrando {preview.rows.length} linhas (página {preview.page} de{" "}
             {totalPages})
@@ -120,36 +122,38 @@ export default function ViewStep() {
       </div>
 
       {/* Tabela com Scroll Horizontal */}
-      <div className="border border-gray-200 rounded-card overflow-hidden mb-6">
+      <div className="border border-gray-200 dark:border-gray-800 rounded-card overflow-hidden mb-6">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
                 {preview.columns.map((column) => (
                   <th
                     key={column}
-                    className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap"
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
                   >
                     {column}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
+            <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
               {preview.rows.map((row, rowIndex) => (
                 <tr
                   key={rowIndex}
-                  className="hover:bg-gray-50 transition-colors"
+                  className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
                   {preview.columns.map((column) => (
                     <td
                       key={`${rowIndex}-${column}`}
-                      className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap"
+                      className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap"
                     >
                       {row[column] !== null && row[column] !== undefined ? (
                         String(row[column])
                       ) : (
-                        <span className="text-gray-400 italic">null</span>
+                        <span className="text-gray-400 dark:text-gray-600 italic">
+                          null
+                        </span>
                       )}
                     </td>
                   ))}
@@ -171,7 +175,7 @@ export default function ViewStep() {
           Anterior
         </button>
 
-        <span className="text-sm text-gray-600">
+        <span className="text-sm text-gray-600 dark:text-gray-400">
           Página {currentPage} de {totalPages}
         </span>
 

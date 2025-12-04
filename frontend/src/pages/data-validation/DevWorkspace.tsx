@@ -146,195 +146,184 @@ export default function DevWorkspace() {
   const isDone = projectStatus === "DONE";
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header com Breadcrumb */}
-      <header className="bg-white border-b border-gray-200 shadow-soft">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <nav className="flex items-center gap-2 text-sm mb-2">
-            <Link
-              to="/validation"
-              className="text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              Dashboard
-            </Link>
-            <ChevronRight className="w-4 h-4 text-gray-400" />
-            <span className="text-gray-900 font-medium">
-              Projeto #{projectId}
-            </span>
-          </nav>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-wide">
-            Workspace de Validação
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Ambiente de limpeza e validação de dados
-          </p>
+    <div className="p-8">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 text-sm mb-6">
+        <Link
+          to="/validation"
+          className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        >
+          Dashboard
+        </Link>
+        <ChevronRight className="w-4 h-4 text-gray-400 dark:text-gray-600" />
+        <span className="text-gray-900 dark:text-white font-medium">
+          Projeto #{projectId}
+        </span>
+      </nav>
+
+      {/* Banner de Status - PENDING_REVIEW */}
+      {isPending && (
+        <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 p-4 rounded-card">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
+                Projeto em Análise
+              </h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                Este projeto está na fila de análise do time de dados. Para
+                realizar alterações, cancele o envio usando o botão abaixo.
+              </p>
+            </div>
+          </div>
         </div>
-      </header>
+      )}
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Banner de Status - PENDING_REVIEW */}
-        {isPending && (
-          <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-card">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-yellow-800">
-                  Projeto em Análise
-                </h3>
-                <p className="text-sm text-yellow-700 mt-1">
-                  Este projeto está na fila de análise do time de dados. Para
-                  realizar alterações, cancele o envio usando o botão abaixo.
-                </p>
-              </div>
+      {/* Banner de Status - DONE */}
+      {isDone && (
+        <div className="mb-6 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-400 dark:border-green-600 p-4 rounded-card">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-green-800 dark:text-green-300">
+                Projeto Publicado
+              </h3>
+              <p className="text-sm text-green-700 dark:text-green-400 mt-1">
+                Este projeto foi aprovado e publicado. Não é possível realizar
+                alterações.
+              </p>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Banner de Status - DONE */}
-        {isDone && (
-          <div className="mb-6 bg-green-50 border-l-4 border-green-400 p-4 rounded-card">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-green-600 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold text-green-800">
-                  Projeto Publicado
-                </h3>
-                <p className="text-sm text-green-700 mt-1">
-                  Este projeto foi aprovado e publicado. Não é possível realizar
-                  alterações.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Card Principal */}
-        <div className="bg-white rounded-card shadow-soft border border-gray-100">
-          {/* Stepper - Navegação Horizontal */}
-          <div className="border-b border-gray-200">
-            <div className="flex">
-              {steps.map((step, index) => (
-                <button
-                  key={step.id}
-                  onClick={() => setCurrentStep(index)}
-                  className={`
+      {/* Card Principal */}
+      <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800">
+        {/* Stepper - Navegação Horizontal */}
+        <div className="border-b border-gray-200 dark:border-gray-800">
+          <div className="flex">
+            {steps.map((step, index) => (
+              <button
+                key={step.id}
+                onClick={() => setCurrentStep(index)}
+                className={`
                     flex-1 flex items-center justify-center gap-3 px-6 py-4 
                     border-b-2 transition-all duration-200
                     ${
                       currentStep === index
-                        ? "border-sky-600 text-sky-600 bg-sky-50"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                        ? "border-sky-600 text-sky-600 bg-sky-50 dark:bg-sky-900/20"
+                        : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"
                     }
                   `}
+              >
+                <span
+                  className={
+                    currentStep === index
+                      ? "text-sky-600"
+                      : "text-gray-400 dark:text-gray-600"
+                  }
                 >
-                  <span
-                    className={
-                      currentStep === index ? "text-sky-600" : "text-gray-400"
-                    }
-                  >
-                    {step.icon}
-                  </span>
-                  <span className="font-medium text-sm hidden sm:inline">
-                    {step.title}
-                  </span>
-                </button>
-              ))}
+                  {step.icon}
+                </span>
+                <span className="font-medium text-sm hidden sm:inline">
+                  {step.title}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Conteúdo Dinâmico da Etapa Atual */}
+        <div className="min-h-[400px]">
+          {steps[currentStep].getComponent(!isDraft)}
+        </div>
+
+        {/* Footer - Barra de Ação */}
+        <div className="border-t border-gray-200 dark:border-gray-800 px-6 py-4 bg-gray-50 dark:bg-gray-800 rounded-b-card">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Etapa {currentStep + 1} de {steps.length}
+              {isPending && (
+                <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                  Em Análise
+                </span>
+              )}
+              {isDone && (
+                <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+                  Publicado
+                </span>
+              )}
             </div>
-          </div>
+            <div className="flex items-center gap-3">
+              {currentStep > 0 && isDraft && (
+                <button
+                  onClick={() => setCurrentStep(currentStep - 1)}
+                  className="btn-secondary"
+                  disabled={isSubmitting}
+                >
+                  Voltar
+                </button>
+              )}
 
-          {/* Conteúdo Dinâmico da Etapa Atual */}
-          <div className="min-h-[400px]">
-            {steps[currentStep].getComponent(!isDraft)}
-          </div>
-
-          {/* Footer - Barra de Ação */}
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-card">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Etapa {currentStep + 1} de {steps.length}
-                {isPending && (
-                  <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                    Em Análise
-                  </span>
-                )}
-                {isDone && (
-                  <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Publicado
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                {currentStep > 0 && isDraft && (
-                  <button
-                    onClick={() => setCurrentStep(currentStep - 1)}
-                    className="btn-secondary"
-                    disabled={isSubmitting}
-                  >
-                    Voltar
-                  </button>
-                )}
-
-                {/* Botão de Cancelar Envio (PENDING -> DRAFT) */}
-                {isPending && (
-                  <button
-                    onClick={handleCancel}
-                    disabled={isSubmitting}
-                    className="bg-yellow-600 text-white px-6 py-2.5 rounded-button font-medium 
+              {/* Botão de Cancelar Envio (PENDING -> DRAFT) */}
+              {isPending && (
+                <button
+                  onClick={handleCancel}
+                  disabled={isSubmitting}
+                  className="bg-yellow-600 text-white px-6 py-2.5 rounded-button font-medium 
                              shadow-soft hover:bg-yellow-700 hover:shadow-soft-md 
                              transition-all duration-200 active:scale-95 disabled:opacity-50
                              disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Cancelando...
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-4 h-4" />
-                        Cancelar Envio e Voltar a Editar
-                      </>
-                    )}
-                  </button>
-                )}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Cancelando...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" />
+                      Cancelar Envio e Voltar a Editar
+                    </>
+                  )}
+                </button>
+              )}
 
-                {/* Botão de Avançar/Enviar (somente DRAFT) */}
-                {isDraft && (
-                  <button
-                    onClick={handleNextStep}
-                    disabled={isSubmitting}
-                    className="bg-green-600 text-white px-6 py-2.5 rounded-button font-medium 
+              {/* Botão de Avançar/Enviar (somente DRAFT) */}
+              {isDraft && (
+                <button
+                  onClick={handleNextStep}
+                  disabled={isSubmitting}
+                  className="bg-green-600 text-white px-6 py-2.5 rounded-button font-medium 
                              shadow-soft hover:bg-green-700 hover:shadow-soft-md 
                              transition-all duration-200 active:scale-95 disabled:opacity-50
                              disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        {isLastStep
-                          ? "Enviar para Validação"
-                          : "Avançar para Próxima Etapa"}
-                      </>
-                    )}
-                  </button>
-                )}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      {isLastStep
+                        ? "Enviar para Validação"
+                        : "Avançar para Próxima Etapa"}
+                    </>
+                  )}
+                </button>
+              )}
 
-                {/* Mensagem para projetos publicados */}
-                {isDone && (
-                  <div className="text-sm text-green-700 font-medium">
-                    ✓ Projeto Finalizado
-                  </div>
-                )}
-              </div>
+              {/* Mensagem para projetos publicados */}
+              {isDone && (
+                <div className="text-sm text-green-700 dark:text-green-300 font-medium">
+                  ✓ Projeto Finalizado
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
