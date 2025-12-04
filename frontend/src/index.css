@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* Importar fonte Inter do Google Fonts */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
 
 /* Tema customizado do Tailwind CSS v4 */
@@ -53,8 +52,6 @@
     line-height: 1.6;
     font-weight: 400;
 
-    color-scheme: light;
-
     /* Text rendering otimizado */
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -63,10 +60,12 @@
   }
 
   body {
-    background-color: var(--color-gray-50);
-    color: var(--color-gray-800);
+    background-color: #09090b; /* zinc-950 */
+    color: #e4e4e7; /* zinc-200 */
     min-height: 100vh;
     margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1,
@@ -76,18 +75,18 @@
   h5,
   h6 {
     letter-spacing: var(--tracking-wide);
-    color: var(--color-gray-900);
+    color: #fafafa; /* zinc-50 */
   }
 
   a {
-    color: var(--color-primary-500);
+    color: var(--color-primary-400);
     font-weight: 500;
     text-decoration: none;
     transition: color 0.2s;
   }
 
   a:hover {
-    color: var(--color-primary-600);
+    color: var(--color-primary-300);
   }
 
   /* Remover estilos de foco padrão e aplicar versão customizada */
@@ -125,18 +124,18 @@
 
   .btn-secondary {
     padding: 0.625rem 1.5rem;
-    background-color: white;
-    color: var(--color-gray-700);
+    background-color: #27272a; /* zinc-800 */
+    color: #e4e4e7; /* zinc-200 */
     font-weight: 500;
     border-radius: var(--radius-button);
-    border: 1px solid var(--color-gray-300);
+    border: 1px solid #3f3f46; /* zinc-700 */
     box-shadow: var(--shadow-soft);
     transition: all 0.2s;
   }
 
   .btn-secondary:hover {
-    background-color: var(--color-gray-50);
-    border-color: var(--color-gray-400);
+    background-color: #3f3f46; /* zinc-700 */
+    border-color: #52525b; /* zinc-600 */
   }
 
   .btn-secondary:active {
@@ -145,19 +144,19 @@
 
   /* Cards com estilo moderno */
   .card {
-    background-color: white;
+    background-color: #18181b; /* zinc-900 */
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-soft);
     padding: 1.5rem;
-    border: 1px solid var(--color-gray-100);
+    border: 1px solid #27272a; /* zinc-800 */
   }
 
   .card-hover {
-    background-color: white;
+    background-color: #18181b; /* zinc-900 */
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-soft);
     padding: 1.5rem;
-    border: 1px solid var(--color-gray-100);
+    border: 1px solid #27272a; /* zinc-800 */
     transition: box-shadow 0.2s;
   }
 
@@ -170,19 +169,19 @@
     width: 100%;
     padding: 0.625rem 1rem;
     border-radius: var(--radius-button);
-    border: 1px solid var(--color-gray-300);
-    background-color: white;
-    color: var(--color-gray-900);
+    border: 1px solid #3f3f46; /* zinc-700 */
+    background-color: #27272a; /* zinc-800 */
+    color: #fafafa; /* zinc-50 */
     transition: all 0.2s;
   }
 
   .input-base::placeholder {
-    color: var(--color-gray-400);
+    color: #71717a; /* zinc-500 */
   }
 
   .input-base:focus {
     border-color: var(--color-primary-500);
-    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
   }
 }
 

@@ -9,15 +9,18 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminValidationDashboard from "./pages/admin/AdminValidationDashboard";
 import AdminValidationReview from "./pages/admin/AdminValidationReview";
 import AdminReplicasDashboard from "./pages/admin/AdminReplicasDashboard";
+import MainLayout from "./components/MainLayout";
 import "./App.css";
 
 function App() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<Login />} />
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+
+        {/* Rotas autenticadas com MainLayout */}
+        <Route element={<MainLayout />}>
           <Route path="/services" element={<ServiceSelector />} />
 
           {/* Replicas Module */}
@@ -39,9 +42,9 @@ function App() {
             element={<AdminValidationReview />}
           />
           <Route path="/admin/replicas" element={<AdminReplicasDashboard />} />
-        </Routes>
-      </BrowserRouter>
-    </div>
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
 

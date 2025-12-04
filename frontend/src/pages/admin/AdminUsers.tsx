@@ -83,169 +83,170 @@ export default function AdminUsers() {
   const getRoleBadge = (role: string) => {
     if (role === "adm") {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
           Administrador
         </span>
       );
     }
     return (
-      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
         Desenvolvedor
       </span>
     );
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="p-8">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-soft">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                to="/services"
-                className="btn-secondary flex items-center gap-2"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                Voltar
-              </Link>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 tracking-wide flex items-center gap-3">
-                  <Users className="w-8 h-8 text-purple-600" />
-                  Gestão de Usuários
-                </h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  Gerencie usuários e permissões do sistema
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary flex items-center gap-2"
-            >
-              <UserPlus className="w-5 h-5" />
-              Novo Usuário
-            </button>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <Link
+            to="/services"
+            className="btn-secondary flex items-center gap-2"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Voltar
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <Users className="w-7 h-7 text-purple-600 dark:text-purple-400" />
+              Gestão de Usuários
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              Gerencie usuários e permissões do sistema
+            </p>
           </div>
         </div>
-      </header>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <UserPlus className="w-5 h-5" />
+          Novo Usuário
+        </button>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Loading State */}
-        {loading && (
-          <div className="card text-center py-16">
-            <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Carregando usuários...</p>
-          </div>
-        )}
+      {/* Loading State */}
+      {loading && (
+        <div className="card text-center py-16">
+          <Loader2 className="w-12 h-12 text-primary-500 dark:text-primary-400 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">
+            Carregando usuários...
+          </p>
+        </div>
+      )}
 
-        {/* Error State */}
-        {error && !loading && (
-          <div className="card bg-red-50 border border-red-200">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm text-red-700 font-medium">
-                  Erro ao carregar usuários
-                </p>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
-                <button
-                  onClick={fetchUsers}
-                  className="btn-secondary mt-4 text-sm"
-                >
-                  Tentar Novamente
-                </button>
-              </div>
+      {/* Error State */}
+      {error && !loading && (
+        <div className="card bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                Erro ao carregar usuários
+              </p>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                {error}
+              </p>
+              <button
+                onClick={fetchUsers}
+                className="btn-secondary mt-4 text-sm"
+              >
+                Tentar Novamente
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Users Table */}
-        {!loading && !error && users.length > 0 && (
-          <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Usuário
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Perfil
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Ações
-                    </th>
+      {/* Users Table */}
+      {!loading && !error && users.length > 0 && (
+        <div className="card dark:bg-gray-900 p-0 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+              <thead className="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    ID
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Usuário
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Perfil
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                {users.map((user) => (
+                  <tr
+                    key={user.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                        {user.id}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {user.usuario}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getRoleBadge(user.role)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => handleDeleteUser(user.usuario)}
+                        className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 inline-flex items-center gap-2 text-sm font-medium"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Deletar
+                      </button>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-600">{user.id}</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-900">
-                          {user.usuario}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getRoleBadge(user.role)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => handleDeleteUser(user.usuario)}
-                          className="text-red-600 hover:text-red-700 inline-flex items-center gap-2 text-sm font-medium"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Deletar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Empty State */}
-        {!loading && !error && users.length === 0 && (
-          <div className="card text-center py-16">
-            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-3">
-              Nenhum usuário encontrado
-            </h3>
-            <p className="text-gray-600 mb-6">Comece criando um novo usuário</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn-primary inline-flex items-center gap-2"
-            >
-              <UserPlus className="w-5 h-5" />
-              Novo Usuário
-            </button>
-          </div>
-        )}
-      </main>
+      {/* Empty State */}
+      {!loading && !error && users.length === 0 && (
+        <div className="card dark:bg-gray-900 text-center py-16">
+          <Users className="w-16 h-16 text-gray-300 dark:text-gray-700 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+            Nenhum usuário encontrado
+          </h3>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">
+            Comece criando um novo usuário
+          </p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary inline-flex items-center gap-2"
+          >
+            <UserPlus className="w-5 h-5" />
+            Novo Usuário
+          </button>
+        </div>
+      )}
 
       {/* Modal de Criação */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-card shadow-soft-lg max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">
+          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft-lg max-w-md w-full">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-800">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                 Criar Novo Usuário
               </h2>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -253,7 +254,7 @@ export default function AdminUsers() {
 
             <form onSubmit={handleCreateUser} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Nome de Usuário
                 </label>
                 <input
@@ -269,7 +270,7 @@ export default function AdminUsers() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Senha
                 </label>
                 <input
@@ -285,7 +286,7 @@ export default function AdminUsers() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Perfil
                 </label>
                 <select
