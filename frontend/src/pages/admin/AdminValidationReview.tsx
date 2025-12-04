@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   Loader2,
@@ -12,7 +12,6 @@ import * as validationService from "../../services/validationService";
 
 export default function AdminValidationReview() {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
 
   const [project, setProject] = useState<validationService.Project | null>(
     null

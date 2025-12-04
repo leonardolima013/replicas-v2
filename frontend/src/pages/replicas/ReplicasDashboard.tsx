@@ -51,7 +51,12 @@ export default function ReplicasDashboard() {
       setCreating(true);
       setError(null);
       const response = await replicasService.createReplica(dbPassword);
-      setReplica(response.details);
+      // Converter ReplicaDetails para MyReplicaResponse
+      setReplica({
+        ...response.details,
+        username: currentUser?.usuario || "user",
+        created: new Date().toISOString(),
+      });
       setDbPassword(""); // Limpar senha
     } catch (err: any) {
       setError(err.message || "Erro ao criar réplica. Tente novamente.");
@@ -60,7 +65,7 @@ export default function ReplicasDashboard() {
     }
   };
 
-  const copyToClipboard = (text: string, type: string) => {
+  const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -245,7 +250,7 @@ export default function ReplicasDashboard() {
                     localhost
                   </code>
                   <button
-                    onClick={() => copyToClipboard("localhost", "host")}
+                    onClick={() => copyToClipboard("localhost")}
                     className="text-gray-400 dark:text-gray-500 hover:text-primary-500 dark:hover:text-primary-400 transition-colors"
                   >
                     <Copy className="w-4 h-4" />
@@ -263,9 +268,7 @@ export default function ReplicasDashboard() {
                     {replica.port}
                   </code>
                   <button
-                    onClick={() =>
-                      copyToClipboard(replica.port.toString(), "port")
-                    }
+                    onClick={() => copyToClipboard(replica.port.toString())}
                     className="text-primary-400 dark:text-primary-500 hover:text-primary-600 dark:hover:text-primary-300 transition-colors"
                   >
                     <Copy className="w-4 h-4" />
@@ -283,9 +286,7 @@ export default function ReplicasDashboard() {
                     {replica.database_name}
                   </code>
                   <button
-                    onClick={() =>
-                      copyToClipboard(replica.database_name, "database")
-                    }
+                    onClick={() => copyToClipboard(replica.database_name)}
                     className="text-gray-400 dark:text-gray-500 hover:text-primary-500 dark:hover:text-primary-400 transition-colors"
                   >
                     <Copy className="w-4 h-4" />
@@ -303,9 +304,7 @@ export default function ReplicasDashboard() {
                     {replica.username}
                   </code>
                   <button
-                    onClick={() =>
-                      copyToClipboard(replica.username, "username")
-                    }
+                    onClick={() => copyToClipboard(replica.username)}
                     className="text-gray-400 dark:text-gray-500 hover:text-primary-500 dark:hover:text-primary-400 transition-colors"
                   >
                     <Copy className="w-4 h-4" />
@@ -332,7 +331,7 @@ export default function ReplicasDashboard() {
                   {getSSHCommand()}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(getSSHCommand(), "ssh")}
+                  onClick={() => copyToClipboard(getSSHCommand())}
                   className="ml-4 btn-secondary py-2 px-4 text-xs"
                 >
                   <Copy className="w-4 h-4 inline mr-1" />

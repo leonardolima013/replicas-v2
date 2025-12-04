@@ -1,4 +1,4 @@
-import axios, { AxiosError, type AxiosRequestConfig } from "axios";
+import axios, { type AxiosError } from "axios";
 
 // Configuração base do Axios
 const api = axios.create({
