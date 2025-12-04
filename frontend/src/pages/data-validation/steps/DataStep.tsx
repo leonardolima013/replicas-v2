@@ -134,7 +134,11 @@ const treatmentGroups: TreatmentCard[] = [
   },
 ];
 
-export default function DataStep() {
+interface DataStepProps {
+  readOnly?: boolean;
+}
+
+export default function DataStep({ readOnly = false }: DataStepProps) {
   const { projectId } = useParams<{ projectId: string }>();
   const [diagnosis, setDiagnosis] = useState<DiagnosisData | null>(null);
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(true);
@@ -342,8 +346,8 @@ export default function DataStep() {
                 </div>
               )}
 
-              {/* Botão de Ação (apenas se houver erros) */}
-              {hasIssues && (
+              {/* Botão de Ação (apenas se houver erros e não estiver em readOnly) */}
+              {hasIssues && !readOnly && (
                 <button
                   onClick={() => handleFixIssues(group)}
                   disabled={isLoading}
@@ -364,6 +368,13 @@ export default function DataStep() {
                     "Corrigir Automaticamente"
                   )}
                 </button>
+              )}
+
+              {/* Mensagem de modo somente leitura */}
+              {hasIssues && readOnly && (
+                <div className="text-center text-xs text-gray-500 py-2 italic">
+                  Modo somente leitura
+                </div>
               )}
             </div>
           );

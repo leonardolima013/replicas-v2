@@ -29,6 +29,23 @@ export interface MyReplicaResponse {
   connection_string: string | null;
 }
 
+// Interface para réplica no painel admin
+export interface AdminReplicaItem {
+  container_id: string;
+  name: string;
+  username: string;
+  database_name: string;
+  port: number;
+  status: string;
+  created: string;
+}
+
+// Interface para resposta de listagem admin
+export interface AdminReplicasListResponse {
+  total: number;
+  replicas: AdminReplicaItem[];
+}
+
 /**
  * Cria uma nova réplica para o usuário logado
  * @param dbPassword - Senha para o banco de dados PostgreSQL
@@ -74,11 +91,11 @@ export const getMyReplica = async (): Promise<MyReplicaResponse | null> => {
 
 /**
  * Lista todas as réplicas do sistema (para admin)
- * @returns Lista de réplicas
+ * @returns Lista de todas as réplicas
  */
-export const listAllReplicas = async (): Promise<any> => {
+export const listAllReplicas = async (): Promise<AdminReplicasListResponse> => {
   try {
-    const response = await api.get("/replicas/list");
+    const response = await api.get<AdminReplicasListResponse>("/replicas/list");
     return response.data;
   } catch (error: any) {
     if (error.response?.status === 401) {
