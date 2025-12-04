@@ -41,15 +41,15 @@ interface DiagnosisData {
 }
 
 // Mock de dados - simula resposta da API /validation/{project_id}/treatments/diagnosis
-const mockDiagnosis: DiagnosisData = {
-  brand_issues: 12,
-  ncm_issues: 45,
-  barcode_issues: 8,
-  weight_issues: 3,
-  dimension_issues: 0,
-  search_ref_issues: 22,
-  manufacturer_ref_issues: 15,
-};
+// const mockDiagnosis: DiagnosisData = {
+//   brand_issues: 12,
+//   ncm_issues: 45,
+//   barcode_issues: 8,
+//   weight_issues: 3,
+//   dimension_issues: 0,
+//   search_ref_issues: 22,
+//   manufacturer_ref_issues: 15,
+// };
 
 interface TreatmentCard {
   id: string;

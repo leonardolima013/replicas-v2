@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   ChevronRight,
   Eye,
@@ -28,7 +28,7 @@ const steps: Step[] = [
     id: 0,
     title: "Visualização",
     icon: <Eye className="w-5 h-5" />,
-    getComponent: (readOnly) => <ViewStep />,
+    getComponent: () => <ViewStep />,
   },
   {
     id: 1,
@@ -46,19 +46,18 @@ const steps: Step[] = [
     id: 3,
     title: "Revisão e Envio",
     icon: <Send className="w-5 h-5" />,
-    getComponent: (readOnly) => <ReviewStep />,
+    getComponent: () => <ReviewStep />,
   },
 ];
 
 export default function DevWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
-  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [projectStatus, setProjectStatus] = useState<
     "DRAFT" | "PENDING" | "DONE"
   >("DRAFT");
-  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Buscar informações do projeto ao carregar
@@ -145,8 +144,36 @@ export default function DevWorkspace() {
   const isPending = projectStatus === "PENDING";
   const isDone = projectStatus === "DONE";
 
+  // Estado de loading inicial
+  if (isLoading) {
+    return (
+      <div className="p-8">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
+      {/* Erro ao carregar */}
+      {error && (
+        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 rounded-card">
+          <div className="flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">
+                Erro ao Carregar Projeto
+              </h3>
+              <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                {error}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 text-sm mb-6">
         <Link

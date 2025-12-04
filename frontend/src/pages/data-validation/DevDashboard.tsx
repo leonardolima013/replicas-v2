@@ -2,14 +2,12 @@ import { Plus, ArrowRight, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import * as validationService from "../../services/validationService";
-import { getCurrentUser } from "../../services/authService";
 
 export default function DevDashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<validationService.Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const currentUser = getCurrentUser();
 
   useEffect(() => {
     fetchProjects();
