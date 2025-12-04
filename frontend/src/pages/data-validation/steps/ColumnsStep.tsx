@@ -20,7 +20,11 @@ interface ColumnMapping {
   type: "required" | "optional" | "extra";
 }
 
-export default function ColumnsStep() {
+interface ColumnsStepProps {
+  readOnly?: boolean;
+}
+
+export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
   const { projectId } = useParams<{ projectId: string }>();
   const [analysis, setAnalysis] = useState<ColumnsAnalysisResponse | null>(
     null
@@ -370,7 +374,8 @@ export default function ColumnsStep() {
                             e.target.value
                           )
                         }
-                        className="input-base text-sm w-64"
+                        disabled={readOnly}
+                        className="input-base text-sm w-64 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       >
                         <option value="">Selecione uma coluna...</option>
                         {availableTargets.map((target) => (
@@ -393,29 +398,38 @@ export default function ColumnsStep() {
       </div>
 
       {/* Botão de Aplicar Alterações */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleApplyChanges}
-          disabled={
-            saving ||
-            Object.keys(columnMappings).filter((k) => columnMappings[k])
-              .length === 0
-          }
-          className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Aplicando Alterações...
-            </>
-          ) : (
-            <>
-              <Save className="w-5 h-5" />
-              Aplicar Alterações
-            </>
-          )}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleApplyChanges}
+            disabled={
+              saving ||
+              Object.keys(columnMappings).filter((k) => columnMappings[k])
+                .length === 0
+            }
+            className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Aplicando Alterações...
+              </>
+            ) : (
+              <>
+                <Save className="w-5 h-5" />
+                Aplicar Alterações
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {readOnly && (
+        <div className="text-center text-sm text-gray-500 py-4">
+          <AlertCircle className="w-5 h-5 inline mr-2" />
+          Modo somente leitura - Para editar, cancele o envio do projeto
+        </div>
+      )}
     </div>
   );
 }

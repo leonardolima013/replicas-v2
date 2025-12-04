@@ -5,6 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from backend.core.database import Base
+from backend.core.models import User
 
 class ProjectStatus(str, enum.Enum):
     DRAFT = "DRAFT"             # Em edição pelo usuário
@@ -18,7 +19,7 @@ class Project(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     
     owner_id = Column(Integer, ForeignKey("users.id"))
-    owner = relationship("backend.core.models.User") # Relacionamento com Usuário
+    owner = relationship("User") # Relacionamento com Usuário
 
     original_filename = Column(String)
     file_path = Column(String) # Onde está o arquivo .duckdb no disco

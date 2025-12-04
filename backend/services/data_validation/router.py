@@ -83,8 +83,8 @@ def get_data_preview(
     if not project:
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
-    # Adicionada verificação de permissão
-    if project.owner_id != current_user.id:
+    # Adicionada verificação de permissão (admin pode ver todos os projetos)
+    if project.owner_id != current_user.id and current_user.role != "adm":
         raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
     
     # 2. Buscar os dados no DuckDB
@@ -115,8 +115,8 @@ def run_sql_query(
     if not project:
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
-    # Adicionada verificação de permissão
-    if project.owner_id != current_user.id:
+    # Adicionada verificação de permissão (admin pode executar queries em qualquer projeto)
+    if project.owner_id != current_user.id and current_user.role != "adm":
         raise HTTPException(status_code=403, detail="Sem permissão para alterar este projeto.")
 
     # Bloqueio simples: Só deixa editar se estiver em Rascunho (DRAFT)
@@ -176,6 +176,74 @@ def delete_project(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao deletar projeto: {str(e)}")
 
+# --- ROTA: ENVIAR PARA VALIDAÇÃO (DRAFT -> PENDING_REVIEW) ---
+@router.post("/{project_id}/submit", response_model=schemas.ProjectResponse)
+def submit_project(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Envia o projeto para validação. Muda status de DRAFT para PENDING_REVIEW."""
+    # Buscar projeto
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar se é o owner
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Apenas o proprietário pode enviar o projeto")
+    
+    # Verificar se está em DRAFT
+    if project.status != models.ProjectStatus.DRAFT:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Projeto não pode ser enviado. Status atual: {project.status.value}"
+        )
+    
+    # Mudar status para PENDING_REVIEW
+    project.status = models.ProjectStatus.PENDING_REVIEW
+    db.commit()
+    db.refresh(project)
+    
+    # Retornar projeto atualizado
+    project_dict = schemas.ProjectResponse.model_validate(project).model_dump()
+    project_dict["owner_username"] = project.owner.usuario if project.owner else None
+    return schemas.ProjectResponse(**project_dict)
+
+# --- ROTA: CANCELAR ENVIO (PENDING_REVIEW -> DRAFT) ---
+@router.post("/{project_id}/cancel", response_model=schemas.ProjectResponse)
+def cancel_project(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Cancela o envio do projeto. Muda status de PENDING_REVIEW para DRAFT."""
+    # Buscar projeto
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar se é o owner
+    if project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Apenas o proprietário pode cancelar o envio")
+    
+    # Verificar se está em PENDING_REVIEW
+    if project.status != models.ProjectStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Projeto não está em análise. Status atual: {project.status.value}"
+        )
+    
+    # Mudar status de volta para DRAFT
+    project.status = models.ProjectStatus.DRAFT
+    db.commit()
+    db.refresh(project)
+    
+    # Retornar projeto atualizado
+    project_dict = schemas.ProjectResponse.model_validate(project).model_dump()
+    project_dict["owner_username"] = project.owner.usuario if project.owner else None
+    return schemas.ProjectResponse(**project_dict)
+
 # --- NOVA ROTA: DOWNLOAD CSV ---
 @router.get("/{project_id}/download")
 def download_csv(
@@ -189,7 +257,8 @@ def download_csv(
     if not project:
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
-    if project.owner_id != current_user.id:
+    # Admin pode baixar qualquer projeto
+    if project.owner_id != current_user.id and current_user.role != "adm":
         raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
     
     # 2. Gerar arquivo CSV temporário

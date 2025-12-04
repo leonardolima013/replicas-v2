@@ -1,4 +1,10 @@
-import { Database, FileCheck, Users, ShieldCheck } from "lucide-react";
+import {
+  Database,
+  FileCheck,
+  Users,
+  ShieldCheck,
+  Settings,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getCurrentUser } from "../services/authService";
 import { useEffect, useState } from "react";
@@ -9,41 +15,48 @@ interface Service {
   description: string;
   icon: React.ReactNode;
   path: string;
-  allowedRoles: ("dev" | "adm")[];
 }
 
-const services: Service[] = [
+// Serviços exclusivos para DEV
+const devServices: Service[] = [
   {
-    id: "replicas",
-    title: "Réplicas",
-    description: "Gestão de peças e componentes do sistema",
-    icon: <Database className="w-16 h-16 text-primary-500" />,
+    id: "my-replica",
+    title: "Minha Réplica",
+    description: "Acesse e gerencie sua réplica pessoal de dados",
+    icon: <Database className="w-16 h-16 text-blue-500" />,
     path: "/replicas",
-    allowedRoles: ["dev", "adm"],
   },
   {
     id: "data-validation",
     title: "Data Validation",
     description: "Validação e tratamento de dados importados",
-    icon: <FileCheck className="w-16 h-16 text-primary-500" />,
+    icon: <FileCheck className="w-16 h-16 text-green-500" />,
     path: "/validation",
-    allowedRoles: ["dev", "adm"],
   },
+];
+
+// Serviços exclusivos para ADM
+const adminServices: Service[] = [
   {
     id: "user-management",
     title: "Gestão de Usuários",
     description: "Administração de usuários e permissões",
-    icon: <Users className="w-16 h-16 text-primary-500" />,
+    icon: <Users className="w-16 h-16 text-purple-500" />,
     path: "/admin/users",
-    allowedRoles: ["adm"],
   },
   {
     id: "validation-approval",
     title: "Aprovação de Validações",
     description: "Revisar e aprovar projetos de validação de dados",
-    icon: <ShieldCheck className="w-16 h-16 text-primary-500" />,
+    icon: <ShieldCheck className="w-16 h-16 text-amber-500" />,
     path: "/admin/validation",
-    allowedRoles: ["adm"],
+  },
+  {
+    id: "replicas-management",
+    title: "Gestão de Réplicas",
+    description: "Gerenciar réplicas de todos os desenvolvedores",
+    icon: <Settings className="w-16 h-16 text-sky-500" />,
+    path: "/admin/replicas",
   },
 ];
 
@@ -58,10 +71,8 @@ export default function ServiceSelector() {
     setCurrentUser(user);
   }, []);
 
-  // Filtrar serviços baseado no role do usuário
-  const availableServices = services.filter((service) =>
-    service.allowedRoles.includes(userRole)
-  );
+  // Selecionar serviços baseado no role do usuário
+  const availableServices = userRole === "adm" ? adminServices : devServices;
 
   const handleServiceClick = (service: Service) => {
     console.log(`Navegando para: ${service.title} (${service.path})`);

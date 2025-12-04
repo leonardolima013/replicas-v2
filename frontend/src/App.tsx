@@ -8,6 +8,7 @@ import ReplicasDashboard from "./pages/replicas/ReplicasDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminValidationDashboard from "./pages/admin/AdminValidationDashboard";
 import AdminValidationReview from "./pages/admin/AdminValidationReview";
+import AdminReplicasDashboard from "./pages/admin/AdminReplicasDashboard";
 import "./App.css";
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
             path="/admin/validation/:projectId"
             element={<AdminValidationReview />}
           />
+          <Route path="/admin/replicas" element={<AdminReplicasDashboard />} />
         </Routes>
       </BrowserRouter>
     </div>

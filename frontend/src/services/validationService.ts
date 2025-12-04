@@ -421,6 +421,62 @@ export const renameColumn = async (
 };
 
 /**
+ * Envia o projeto para validação (DRAFT -> PENDING_REVIEW)
+ * @param projectId - ID do projeto
+ */
+export const submitProject = async (projectId: string): Promise<Project> => {
+  try {
+    const response = await api.post<Project>(`/validation/${projectId}/submit`);
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para enviar este projeto.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail || "Projeto não pode ser enviado."
+      );
+    }
+    throw new Error(error.response?.data?.detail || "Erro ao enviar projeto.");
+  }
+};
+
+/**
+ * Cancela o envio do projeto (PENDING_REVIEW -> DRAFT)
+ * @param projectId - ID do projeto
+ */
+export const cancelProject = async (projectId: string): Promise<Project> => {
+  try {
+    const response = await api.post<Project>(`/validation/${projectId}/cancel`);
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para cancelar este projeto.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail || "Projeto não pode ser cancelado."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao cancelar projeto."
+    );
+  }
+};
+
+/**
  * Deleta um projeto
  * @param projectId - ID do projeto
  */
