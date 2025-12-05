@@ -9,10 +9,14 @@ import {
   AlertCircle,
   Loader2,
   XCircle,
+  BarChart3,
+  Copy,
 } from "lucide-react";
 import ViewStep from "./steps/ViewStep";
 import ColumnsStep from "./steps/ColumnsStep";
+import DuplicatesStep from "./steps/DuplicatesStep";
 import DataStep from "./steps/DataStep";
+import StatisticsStep from "./steps/StatisticsStep";
 import ReviewStep from "./steps/ReviewStep";
 import * as validationService from "../../services/validationService";
 
@@ -38,12 +42,24 @@ const steps: Step[] = [
   },
   {
     id: 2,
+    title: "Remoção de Duplicatas",
+    icon: <Copy className="w-5 h-5" />,
+    getComponent: (readOnly) => <DuplicatesStep readOnly={readOnly} />,
+  },
+  {
+    id: 3,
     title: "Tratamento de Dados",
     icon: <Wand2 className="w-5 h-5" />,
     getComponent: (readOnly) => <DataStep readOnly={readOnly} />,
   },
   {
-    id: 3,
+    id: 4,
+    title: "Estatísticas",
+    icon: <BarChart3 className="w-5 h-5" />,
+    getComponent: () => <StatisticsStep />,
+  },
+  {
+    id: 5,
     title: "Revisão e Envio",
     icon: <Send className="w-5 h-5" />,
     getComponent: () => <ReviewStep />,

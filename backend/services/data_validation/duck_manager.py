@@ -167,7 +167,7 @@ class DuckSession:
             conn.close()
 
     def diagnose_null_strings(self, columns_to_check: set, table_name: str = "raw_data"):
-        """Verifica quais colunas de string têm valores nulos ou 'nan'."""
+        """Verifica quais colunas de string têm valores vazios (que devem ser NULL)."""
         conn = self._get_conn(read_only=True)
         issues = []
         try:
@@ -175,7 +175,8 @@ class DuckSession:
             valid_columns = columns_to_check & current_columns
             
             for col in valid_columns:
-                query = f"SELECT COUNT(*) FROM {table_name} WHERE \"{col}\" IS NULL OR LOWER(\"{col}\") = 'nan' OR \"{col}\" = ''"
+                # Considera erro apenas strings vazias (após TRIM)
+                query = f"SELECT COUNT(*) FROM {table_name} WHERE TRIM(\"{col}\") = ''"
                 count = conn.execute(query).fetchone()[0]
                 if count > 0:
                     issues.append(col)
@@ -184,7 +185,7 @@ class DuckSession:
             conn.close()
 
     def diagnose_null_numerics(self, columns_to_check: set, table_name: str = "raw_data"):
-        """Verifica quais colunas numéricas têm valores nulos."""
+        """Verifica quais colunas numéricas têm valores zero (que devem ser NULL)."""
         conn = self._get_conn(read_only=True)
         issues = []
         try:
@@ -192,7 +193,11 @@ class DuckSession:
             valid_columns = columns_to_check & current_columns
             
             for col in valid_columns:
-                query = f"SELECT COUNT(*) FROM {table_name} WHERE \"{col}\" IS NULL OR LOWER(\"{col}\") = 'nan' OR \"{col}\" = ''"
+                # Considera erro apenas valores iguais a zero
+                query = f"""
+                    SELECT COUNT(*) FROM {table_name} 
+                    WHERE TRY_CAST(\"{col}\" AS DOUBLE) = 0
+                """
                 count = conn.execute(query).fetchone()[0]
                 if count > 0:
                     issues.append(col)
@@ -271,7 +276,7 @@ class DuckSession:
             conn.close()
 
     def diagnose_weight_issues(self, table_name: str = "raw_data"):
-        """Diagnostica problemas em pesos: gross < net, negativos, zerados."""
+        """Diagnostica problemas em pesos: gross < net ou valores negativos."""
         conn = self._get_conn(read_only=True)
         try:
             current_columns = set(self.get_columns(table_name))
@@ -281,14 +286,16 @@ class DuckSession:
             if not (has_gross and has_net):
                 return 0
             
-            # Tentar converter para DOUBLE, se falhar usar como VARCHAR
+            # Problemas reais:
+            # 1. Peso bruto MENOR que líquido (gross < net)
+            # 2. Valores negativos em qualquer um dos pesos
+            # NOTA: Pesos iguais (incluindo ambos zero) NÃO são considerados erro
             query = f"""
                 SELECT COUNT(*) FROM {table_name}
                 WHERE
                     (TRY_CAST(gross_weight AS DOUBLE) < TRY_CAST(net_weight AS DOUBLE))
                     OR (TRY_CAST(gross_weight AS DOUBLE) < 0)
                     OR (TRY_CAST(net_weight AS DOUBLE) < 0)
-                    OR (TRY_CAST(gross_weight AS DOUBLE) = 0 AND TRY_CAST(net_weight AS DOUBLE) = 0)
             """
             count = conn.execute(query).fetchone()[0]
             return count
@@ -309,7 +316,7 @@ class DuckSession:
             # Construir condições dinamicamente para colunas existentes
             conditions = []
             for dim in existing_dims:
-                conditions.append(f"TRY_CAST({dim} AS DOUBLE) <= 0")
+                conditions.append(f"TRY_CAST({dim} AS DOUBLE) < 0")
                 conditions.append(f"TRY_CAST({dim} AS DOUBLE) > 1000")
             
             where_clause = " OR ".join(conditions)
@@ -343,22 +350,22 @@ class DuckSession:
             conn.close()
 
     def diagnose_manufacturer_ref_issues(self, table_name: str = "raw_data"):
-        """Diagnostica problemas em manufacturer_ref: tamanho < 3, espaços, caracteres proibidos."""
+        """Diagnostica problemas em search_ref: tamanho < 3, espaços, caracteres proibidos."""
         conn = self._get_conn(read_only=True)
         try:
             current_columns = set(self.get_columns(table_name))
-            if "manufacturer_ref" not in current_columns:
+            if "search_ref" not in current_columns:
                 return 0
             
             query = f"""
                 SELECT COUNT(*) FROM {table_name}
                 WHERE
-                    manufacturer_ref IS NOT NULL
-                    AND manufacturer_ref != ''
+                    search_ref IS NOT NULL
+                    AND search_ref != ''
                     AND (
-                        LENGTH(manufacturer_ref) < 3
-                        OR manufacturer_ref LIKE '% %'
-                        OR manufacturer_ref SIMILAR TO '.*[@#%&].*'
+                        LENGTH(search_ref) < 3
+                        OR search_ref LIKE '% %'
+                        OR search_ref SIMILAR TO '.*[@#%&].*'
                     )
             """
             count = conn.execute(query).fetchone()[0]
@@ -367,7 +374,7 @@ class DuckSession:
             conn.close()
 
     def fix_null_strings(self, columns_to_fix: set, table_name: str = "raw_data"):
-        """Substitui NULL e 'nan' por string vazia em colunas de texto."""
+        """Converte strings vazias para NULL em colunas de texto."""
         # Obter colunas válidas usando método separado
         current_columns = set(self.get_columns(table_name))
         valid_columns = columns_to_fix & current_columns
@@ -377,12 +384,18 @@ class DuckSession:
             total_affected = 0
             
             for col in valid_columns:
-                # Primeiro, atualizar NULLs e 'nan'
-                query = f"UPDATE {table_name} SET \"{col}\" = '' WHERE \"{col}\" IS NULL OR LOWER(\"{col}\") = 'nan'"
-                result = conn.execute(query)
-                # DuckDB não retorna rows_affected diretamente, então contamos antes
-                count_query = f"SELECT COUNT(*) FROM {table_name} WHERE \"{col}\" = ''"
-                total_affected += conn.execute(count_query).fetchone()[0]
+                # Contar quantas strings vazias existem
+                count_query = f"SELECT COUNT(*) FROM {table_name} WHERE TRIM(\"{col}\") = ''"
+                affected = conn.execute(count_query).fetchone()[0]
+                total_affected += affected
+                
+                # Converter strings vazias para NULL
+                query = f"""
+                    UPDATE {table_name} 
+                    SET \"{col}\" = NULL 
+                    WHERE TRIM(\"{col}\") = ''
+                """
+                conn.execute(query)
             
             return {"columns": list(valid_columns), "rows_affected": total_affected}
         finally:
@@ -413,47 +426,30 @@ class DuckSession:
             conn.close()
 
     def fix_null_numerics(self, columns_to_fix: set, table_name: str = "raw_data"):
-        """Substitui NULL por 0 em colunas numéricas, com conversão de tipo se necessário."""
-        # Obter colunas válidas e tipos usando método separado
+        """Converte valores zero para NULL em colunas numéricas."""
+        # Obter colunas válidas usando método separado
         current_columns = set(self.get_columns(table_name))
         valid_columns = columns_to_fix & current_columns
         
-        # Obter informações de tipo das colunas em uma conexão separada
-        conn_info = self._get_conn(read_only=True)
-        try:
-            columns_info = conn_info.execute(f"DESCRIBE {table_name}").fetchall()
-            column_types = {col[0]: col[1] for col in columns_info}
-        finally:
-            conn_info.close()
-        
-        # Agora fazer as modificações
         conn = self._get_conn(read_only=False)
         try:
             total_affected = 0
             
             for col in valid_columns:
-                # Contar quantas linhas têm NULL ou 'nan'
-                count_query = f"SELECT COUNT(*) FROM {table_name} WHERE \"{col}\" IS NULL OR LOWER(\"{col}\") = 'nan' OR \"{col}\" = ''"
+                # Contar quantas linhas têm valor zero
+                count_query = f"""
+                    SELECT COUNT(*) FROM {table_name} 
+                    WHERE TRY_CAST(\"{col}\" AS DOUBLE) = 0
+                """
                 affected = conn.execute(count_query).fetchone()[0]
                 total_affected += affected
                 
-                col_type = column_types.get(col, "VARCHAR")
-                
-                # Se a coluna for VARCHAR (importada com ALL_VARCHAR=TRUE), precisamos converter
-                if "VARCHAR" in col_type.upper():
-                    # Primeiro, substituir 'nan' e vazios por NULL
-                    conn.execute(f"UPDATE {table_name} SET \"{col}\" = NULL WHERE LOWER(\"{col}\") = 'nan' OR \"{col}\" = ''")
-                    
-                    # Depois, tentar converter para DOUBLE e substituir NULL por 0
-                    try:
-                        conn.execute(f"ALTER TABLE {table_name} ALTER COLUMN \"{col}\" TYPE DOUBLE")
-                        conn.execute(f"UPDATE {table_name} SET \"{col}\" = 0 WHERE \"{col}\" IS NULL")
-                    except:
-                        # Se falhar a conversão, apenas substituir por '0' como string
-                        conn.execute(f"UPDATE {table_name} SET \"{col}\" = '0' WHERE \"{col}\" IS NULL")
-                else:
-                    # Se já for numérico, apenas substituir NULL por 0
-                    conn.execute(f"UPDATE {table_name} SET \"{col}\" = 0 WHERE \"{col}\" IS NULL")
+                # Converter zeros para NULL
+                conn.execute(f"""
+                    UPDATE {table_name} 
+                    SET \"{col}\" = NULL 
+                    WHERE TRY_CAST(\"{col}\" AS DOUBLE) = 0
+                """)
             
             return {"columns": list(valid_columns), "rows_affected": total_affected}
         finally:
@@ -513,37 +509,31 @@ class DuckSession:
             conn.close()
 
     def apply_codes_fix(self, table_name: str = "raw_data"):
-        """Sanitiza search_ref e manufacturer_ref: TRIM, UPPER, remove espaços e caracteres especiais."""
+        """Sanitiza search_ref: TRIM, UPPER, remove espaços e caracteres especiais."""
         current_columns = set(self.get_columns(table_name))
-        codes = {"search_ref", "manufacturer_ref"}
-        existing_codes = codes & current_columns
         
-        if not existing_codes:
+        if "search_ref" not in current_columns:
             return {"columns": [], "rows_affected": 0}
         
         conn = self._get_conn(read_only=False)
         try:
-            total_affected = 0
+            # Contar linhas que serão afetadas
+            count_query = f"""
+                SELECT COUNT(*) FROM {table_name}
+                WHERE \"search_ref\" IS NOT NULL 
+                AND \"search_ref\" != ''
+                AND \"search_ref\" != regexp_replace(TRIM(UPPER(\"search_ref\")), '[^A-Z0-9]', '', 'g')
+            """
+            affected = conn.execute(count_query).fetchone()[0]
             
-            for col in existing_codes:
-                # Contar linhas que serão afetadas
-                count_query = f"""
-                    SELECT COUNT(*) FROM {table_name}
-                    WHERE \"{col}\" IS NOT NULL 
-                    AND \"{col}\" != ''
-                    AND \"{col}\" != regexp_replace(TRIM(UPPER(\"{col}\")), '[^A-Z0-9]', '', 'g')
-                """
-                affected = conn.execute(count_query).fetchone()[0]
-                total_affected += affected
-                
-                # Aplicar: TRIM + UPPER + remover tudo que não for alfanumérico
-                conn.execute(f"""
-                    UPDATE {table_name} 
-                    SET \"{col}\" = regexp_replace(TRIM(UPPER(\"{col}\")), '[^A-Z0-9]', '', 'g')
-                    WHERE \"{col}\" IS NOT NULL AND \"{col}\" != ''
-                """)
+            # Aplicar: TRIM + UPPER + remover tudo que não for alfanumérico
+            conn.execute(f"""
+                UPDATE {table_name} 
+                SET \"search_ref\" = regexp_replace(TRIM(UPPER(\"search_ref\")), '[^A-Z0-9]', '', 'g')
+                WHERE \"search_ref\" IS NOT NULL AND \"search_ref\" != ''
+            """)
             
-            return {"columns": list(existing_codes), "rows_affected": total_affected}
+            return {"columns": ["search_ref"], "rows_affected": affected}
         finally:
             conn.close()
 
@@ -575,7 +565,12 @@ class DuckSession:
                 if "VARCHAR" in col_type.upper():
                     try:
                         # Limpar valores não-numéricos antes de converter
-                        conn.execute(f"UPDATE {table_name} SET \"{col}\" = NULL WHERE LOWER(\"{col}\") = 'nan' OR \"{col}\" = ''")
+                        conn.execute(f"""
+                            UPDATE {table_name} 
+                            SET \"{col}\" = NULL 
+                            WHERE LOWER(TRIM(\"{col}\")) IN ('nan', 'none', 'null', '')
+                               OR TRIM(\"{col}\") = ''
+                        """)
                         conn.execute(f"ALTER TABLE {table_name} ALTER COLUMN \"{col}\" TYPE DOUBLE")
                     except:
                         # Se falhar, pular esta coluna
@@ -655,6 +650,85 @@ class DuckSession:
         finally:
             conn.close()
 
+    def get_duplicates_diagnosis(self, columns: list = None, table_name: str = "raw_data", page: int = 1, page_size: int = 50):
+        """
+        Diagnostica duplicatas baseadas nas colunas especificadas.
+        Retorna preview paginado das linhas que serão removidas.
+        """
+        if columns is None:
+            columns = ["search_ref", "brand"]
+        
+        # Verificar se as colunas existem
+        current_columns = set(self.get_columns(table_name))
+        valid_columns = [col for col in columns if col in current_columns]
+        
+        if not valid_columns:
+            return {"total_duplicates": 0, "preview": [], "columns_used": []}
+        
+        conn = self._get_conn(read_only=True)
+        try:
+            # Construir partition clause
+            partition_cols = ", ".join(valid_columns)
+            
+            # Construir condição WHERE (não pode usar \' dentro de f-string)
+            where_conditions = []
+            for col in valid_columns:
+                where_conditions.append(f'"{col}" IS NOT NULL AND "{col}" != \'\'')
+            where_clause = ' AND '.join(where_conditions)
+            
+            # Calcular offset para paginação
+            offset = (page - 1) * page_size
+            
+            # Query para identificar duplicatas (rn > 1 significa que não é a primeira ocorrência)
+            query = f"""
+                WITH ranked_data AS (
+                    SELECT 
+                        *,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY {partition_cols}
+                            ORDER BY rowid
+                        ) as rn
+                    FROM {table_name}
+                    WHERE {where_clause}
+                )
+                SELECT * FROM ranked_data
+                WHERE rn > 1
+                ORDER BY {partition_cols}, rn
+                LIMIT {page_size} OFFSET {offset}
+            """
+            
+            duplicates_df = conn.execute(query).fetchdf()
+            
+            # Remover coluna auxiliar 'rn' antes de retornar
+            if 'rn' in duplicates_df.columns:
+                duplicates_df = duplicates_df.drop(columns=['rn'])
+            
+            # Contar total de duplicatas (todas as linhas que não são primeira ocorrência)
+            count_query = f"""
+                WITH ranked_data AS (
+                    SELECT 
+                        ROW_NUMBER() OVER (
+                            PARTITION BY {partition_cols}
+                            ORDER BY rowid
+                        ) as rn
+                    FROM {table_name}
+                    WHERE {where_clause}
+                )
+                SELECT COUNT(*) FROM ranked_data WHERE rn > 1
+            """
+            total_duplicates = conn.execute(count_query).fetchone()[0]
+            
+            return {
+                "total_duplicates": int(total_duplicates),
+                "preview": duplicates_df.to_dict(orient="records"),
+                "columns_used": valid_columns,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": (int(total_duplicates) + page_size - 1) // page_size if total_duplicates > 0 else 0
+            }
+        finally:
+            conn.close()
+
     def remove_duplicates(self, table_name: str = "raw_data"):
         """Remove duplicadas mantendo apenas a primeira ocorrência de cada search_ref + brand."""
         current_columns = set(self.get_columns(table_name))
@@ -663,14 +737,20 @@ class DuckSession:
         
         conn = self._get_conn(read_only=False)
         try:
-            # Contar duplicadas antes de remover
+            # Contar duplicadas antes de remover usando ROW_NUMBER
             count_query = f"""
-                SELECT COUNT(*) - COUNT(DISTINCT search_ref, brand) as duplicates
-                FROM {table_name}
-                WHERE search_ref IS NOT NULL 
-                AND search_ref != ''
-                AND brand IS NOT NULL 
-                AND brand != ''
+                WITH ranked_data AS (
+                    SELECT ROW_NUMBER() OVER (
+                        PARTITION BY search_ref, brand
+                        ORDER BY rowid
+                    ) as rn
+                    FROM {table_name}
+                    WHERE search_ref IS NOT NULL 
+                    AND search_ref != ''
+                    AND brand IS NOT NULL 
+                    AND brand != ''
+                )
+                SELECT COUNT(*) FROM ranked_data WHERE rn > 1
             """
             duplicates_count = conn.execute(count_query).fetchone()[0]
             
@@ -698,5 +778,105 @@ class DuckSession:
             conn.execute(f"ALTER TABLE {table_name}_temp RENAME TO {table_name}")
             
             return {"rows_affected": int(duplicates_count)}
+        finally:
+            conn.close()
+
+    def get_statistics(self, table_name: str = "raw_data"):
+        """Calcula estatísticas completas sobre os dados: resumo numérico, correlações e violações."""
+        conn = self._get_conn(read_only=True)
+        try:
+            # Obter colunas disponíveis
+            current_columns = set(self.get_columns(table_name))
+            
+            # Definir colunas numéricas de interesse
+            numeric_cols = {"gross_weight", "net_weight", "width", "height", "depth"}
+            existing_numeric = numeric_cols & current_columns
+            
+            if not existing_numeric:
+                return {
+                    "summary": [],
+                    "violations": {"count_weight_error": 0, "count_negative": 0},
+                    "correlation": None
+                }
+            
+            # 1. SUMMARIZE: min, max, avg, stddev, quartis para todas as colunas numéricas
+            summary_results = []
+            for col in existing_numeric:
+                # DuckDB SUMMARIZE retorna estatísticas automáticas
+                summary_query = f"SUMMARIZE SELECT TRY_CAST(\"{col}\" AS DOUBLE) as value FROM {table_name} WHERE \"{col}\" IS NOT NULL"
+                try:
+                    summary_df = conn.execute(summary_query).fetchdf()
+                    
+                    # Construir estatísticas manualmente se SUMMARIZE não funcionar como esperado
+                    stats_query = f"""
+                        SELECT 
+                            '{col}' as column_name,
+                            MIN(TRY_CAST(\"{col}\" AS DOUBLE)) as min,
+                            MAX(TRY_CAST(\"{col}\" AS DOUBLE)) as max,
+                            AVG(TRY_CAST(\"{col}\" AS DOUBLE)) as avg,
+                            STDDEV(TRY_CAST(\"{col}\" AS DOUBLE)) as stddev,
+                            PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY TRY_CAST(\"{col}\" AS DOUBLE)) as q25,
+                            PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY TRY_CAST(\"{col}\" AS DOUBLE)) as q50,
+                            PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY TRY_CAST(\"{col}\" AS DOUBLE)) as q75
+                        FROM {table_name}
+                        WHERE \"{col}\" IS NOT NULL
+                    """
+                    stats = conn.execute(stats_query).fetchone()
+                    summary_results.append({
+                        "column": stats[0],
+                        "min": float(stats[1]) if stats[1] is not None else None,
+                        "max": float(stats[2]) if stats[2] is not None else None,
+                        "avg": float(stats[3]) if stats[3] is not None else None,
+                        "stddev": float(stats[4]) if stats[4] is not None else None,
+                        "q25": float(stats[5]) if stats[5] is not None else None,
+                        "q50": float(stats[6]) if stats[6] is not None else None,
+                        "q75": float(stats[7]) if stats[7] is not None else None,
+                    })
+                except Exception:
+                    # Se falhar, pular esta coluna
+                    continue
+            
+            # 2. CORRELAÇÃO entre gross_weight e net_weight
+            correlation = None
+            if "gross_weight" in existing_numeric and "net_weight" in existing_numeric:
+                corr_query = f"""
+                    SELECT CORR(
+                        TRY_CAST(gross_weight AS DOUBLE),
+                        TRY_CAST(net_weight AS DOUBLE)
+                    ) as correlation
+                    FROM {table_name}
+                    WHERE gross_weight IS NOT NULL AND net_weight IS NOT NULL
+                """
+                corr_result = conn.execute(corr_query).fetchone()[0]
+                correlation = float(corr_result) if corr_result is not None else None
+            
+            # 3. VIOLAÇÕES FÍSICAS
+            violations = {"count_weight_error": 0, "count_negative": 0}
+            
+            # 3a. Contar onde net_weight > gross_weight
+            if "gross_weight" in existing_numeric and "net_weight" in existing_numeric:
+                weight_error_query = f"""
+                    SELECT COUNT(*) FROM {table_name}
+                    WHERE TRY_CAST(net_weight AS DOUBLE) > TRY_CAST(gross_weight AS DOUBLE)
+                """
+                violations["count_weight_error"] = conn.execute(weight_error_query).fetchone()[0]
+            
+            # 3b. Contar valores negativos em qualquer coluna numérica
+            negative_conditions = []
+            for col in existing_numeric:
+                negative_conditions.append(f"TRY_CAST(\"{col}\" AS DOUBLE) < 0")
+            
+            if negative_conditions:
+                negative_query = f"""
+                    SELECT COUNT(*) FROM {table_name}
+                    WHERE {' OR '.join(negative_conditions)}
+                """
+                violations["count_negative"] = conn.execute(negative_query).fetchone()[0]
+            
+            return {
+                "summary": summary_results,
+                "violations": violations,
+                "correlation": correlation
+            }
         finally:
             conn.close()

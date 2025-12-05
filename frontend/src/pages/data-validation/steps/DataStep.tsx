@@ -11,6 +11,7 @@ import {
   Type,
   Hash,
   FileText,
+  Tag,
 } from "lucide-react";
 import {
   getDiagnosis,
@@ -18,6 +19,7 @@ import {
   fixBarcodes,
   fixWeights,
   fixDimensions,
+  fixCodes,
   fixNullStrings,
   fixUppercase,
   fixNullNumerics,
@@ -131,6 +133,14 @@ const treatmentGroups: TreatmentCard[] = [
     icon: <Ruler className="w-6 h-6" />,
     issuesKey: "dimension_issues",
     fixFunction: fixDimensions,
+  },
+  {
+    id: "codes",
+    title: "Referências (Códigos)",
+    description: "Search_ref com caracteres especiais ou tamanho inválido",
+    icon: <Tag className="w-6 h-6" />,
+    issuesKey: "manufacturer_ref_issues",
+    fixFunction: fixCodes,
   },
 ];
 

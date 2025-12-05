@@ -81,6 +81,38 @@ export interface RenameColumnResponse {
   new_name: string;
 }
 
+// Interface para estatísticas
+export interface ColumnStatistics {
+  column: string;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+  stddev: number | null;
+  q25: number | null;
+  q50: number | null;
+  q75: number | null;
+}
+
+export interface StatisticsResponse {
+  project_id: string;
+  summary: ColumnStatistics[];
+  violations: {
+    count_weight_error: number;
+    count_negative: number;
+  };
+  correlation: number | null;
+}
+
+// Interface para diagnóstico de duplicatas
+export interface DuplicatesDiagnosisResponse {
+  total_duplicates: number;
+  preview: Record<string, any>[];
+  columns_used: string[];
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 // ==================== FUNÇÕES DE API ====================
 
 /**
@@ -273,7 +305,7 @@ export const fixDimensions = async (
 ): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-codes`
+      `/validation/${projectId}/treatments/fix-dimensions`
     );
     return response.data;
   } catch (error: any) {
@@ -285,6 +317,29 @@ export const fixDimensions = async (
     }
     throw new Error(
       error.response?.data?.detail || "Erro ao corrigir dimensões."
+    );
+  }
+};
+
+/**
+ * Corrige problemas de códigos de referência (search_ref e manufacturer_ref)
+ * @param projectId - ID do projeto
+ */
+export const fixCodes = async (projectId: string): Promise<FixResponse> => {
+  try {
+    const response = await api.post<FixResponse>(
+      `/validation/${projectId}/treatments/fix-codes`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao corrigir códigos de referência."
     );
   }
 };
@@ -472,6 +527,95 @@ export const cancelProject = async (projectId: string): Promise<Project> => {
     }
     throw new Error(
       error.response?.data?.detail || "Erro ao cancelar projeto."
+    );
+  }
+};
+
+/**
+ * Busca estatísticas matemáticas de um projeto
+ * @param projectId - ID do projeto
+ */
+export const getStatistics = async (
+  projectId: string
+): Promise<StatisticsResponse> => {
+  try {
+    const response = await api.get<StatisticsResponse>(
+      `/validation/${projectId}/statistics`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para acessar este projeto.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao buscar estatísticas."
+    );
+  }
+};
+
+/**
+ * Busca diagnóstico de duplicatas de um projeto
+ * @param projectId - ID do projeto
+ * @param page - Página atual (padrão: 1)
+ * @param pageSize - Tamanho da página (padrão: 50)
+ */
+export const getDuplicatesDiagnosis = async (
+  projectId: string,
+  page: number = 1,
+  pageSize: number = 50
+): Promise<DuplicatesDiagnosisResponse> => {
+  try {
+    const response = await api.get<DuplicatesDiagnosisResponse>(
+      `/validation/${projectId}/duplicates/diagnosis`,
+      { params: { page, page_size: pageSize } }
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para acessar este projeto.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao diagnosticar duplicatas."
+    );
+  }
+};
+
+/**
+ * Remove duplicatas de um projeto
+ * @param projectId - ID do projeto
+ */
+export const removeDuplicates = async (
+  projectId: string
+): Promise<FixResponse> => {
+  try {
+    const response = await api.post<FixResponse>(
+      `/validation/${projectId}/duplicates/remove`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para alterar este projeto.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao remover duplicatas."
     );
   }
 };
