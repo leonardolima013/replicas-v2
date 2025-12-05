@@ -18,9 +18,12 @@ interface DuplicatesDiagnosisProps {
   readOnly?: boolean;
 }
 
-export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosisProps) {
+export default function DuplicatesStep({
+  readOnly = false,
+}: DuplicatesDiagnosisProps) {
   const { projectId } = useParams<{ projectId: string }>();
-  const [diagnosis, setDiagnosis] = useState<validationService.DuplicatesDiagnosisResponse | null>(null);
+  const [diagnosis, setDiagnosis] =
+    useState<validationService.DuplicatesDiagnosisResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +43,11 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
     try {
       setLoading(true);
       setError(null);
-      const data = await validationService.getDuplicatesDiagnosis(projectId, currentPage, pageSize);
+      const data = await validationService.getDuplicatesDiagnosis(
+        projectId,
+        currentPage,
+        pageSize
+      );
       setDiagnosis(data);
     } catch (err: any) {
       setError(err.message || "Erro ao carregar diagnóstico de duplicatas");
@@ -64,7 +71,7 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
       setSuccessMessage(null);
 
       const result = await validationService.removeDuplicates(projectId);
-      
+
       setSuccessMessage(
         `✅ Limpeza concluída! ${result.rows_affected} registos duplicados foram removidos.`
       );
@@ -121,7 +128,8 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
           Análise de Duplicatas
         </h2>
         <p className="text-zinc-500 mt-1">
-          Identificação e remoção de registos duplicados baseado em search_ref + brand
+          Identificação e remoção de registos duplicados baseado em search_ref +
+          brand
         </p>
       </div>
 
@@ -134,9 +142,11 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
               💡 Dica: Padronize antes de remover duplicatas
             </p>
             <p className="text-zinc-400 text-sm mt-1">
-              Recomendamos executar a <strong>Padronização de Texto (Uppercase/Trim)</strong> na aba 
-              "Tratamento de Dados" antes de remover duplicatas. Isso garante que variações de escrita 
-              como "FILTRO DE OLEO" e "Filtro de oleo" sejam detectadas como duplicatas.
+              Recomendamos executar a{" "}
+              <strong>Padronização de Texto (Uppercase/Trim)</strong> na aba
+              "Tratamento de Dados" antes de remover duplicatas. Isso garante
+              que variações de escrita como "FILTRO DE OLEO" e "Filtro de oleo"
+              sejam detectadas como duplicatas.
             </p>
           </div>
         </div>
@@ -162,8 +172,8 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
                 Nenhuma Duplicata Encontrada
               </h3>
               <p className="text-zinc-400 mt-2">
-                A base está limpa! Não foram encontrados registos com a mesma combinação 
-                de search_ref e brand.
+                A base está limpa! Não foram encontrados registos com a mesma
+                combinação de search_ref e brand.
               </p>
             </div>
           </div>
@@ -177,9 +187,10 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
                 {diagnosis.total_duplicates} Registos Duplicados Encontrados
               </h3>
               <p className="text-zinc-400 mt-2">
-                Estes itens compartilham o mesmo <strong>search_ref</strong> e <strong>brand</strong>. 
-                Ao limpar, manteremos apenas a primeira linha encontrada no arquivo 
-                e removeremos as {diagnosis.total_duplicates} ocorrências duplicadas.
+                Estes itens compartilham o mesmo <strong>search_ref</strong> e{" "}
+                <strong>brand</strong>. Ao limpar, manteremos apenas a primeira
+                linha encontrada no arquivo e removeremos as{" "}
+                {diagnosis.total_duplicates} ocorrências duplicadas.
               </p>
               <p className="text-zinc-500 text-sm mt-2">
                 Colunas usadas: {diagnosis.columns_used.join(", ")}
@@ -226,7 +237,8 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
               Registos Duplicados
             </h3>
             <p className="text-zinc-500 text-sm mt-1">
-              Página {diagnosis.page} de {diagnosis.total_pages} ({diagnosis.total_duplicates} total)
+              Página {diagnosis.page} de {diagnosis.total_pages} (
+              {diagnosis.total_duplicates} total)
             </p>
           </div>
 
@@ -283,9 +295,14 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
             <div className="p-4 bg-zinc-800/50 border-t border-zinc-800">
               <div className="flex items-center justify-between">
                 <p className="text-zinc-500 text-sm">
-                  Exibindo {((diagnosis.page - 1) * diagnosis.page_size) + 1} - {Math.min(diagnosis.page * diagnosis.page_size, diagnosis.total_duplicates)} de {diagnosis.total_duplicates} registos
+                  Exibindo {(diagnosis.page - 1) * diagnosis.page_size + 1} -{" "}
+                  {Math.min(
+                    diagnosis.page * diagnosis.page_size,
+                    diagnosis.total_duplicates
+                  )}{" "}
+                  de {diagnosis.total_duplicates} registos
                 </p>
-                
+
                 <div className="flex items-center gap-2">
                   {/* Primeira Página */}
                   <button
@@ -309,32 +326,35 @@ export default function DuplicatesStep({ readOnly = false }: DuplicatesDiagnosis
 
                   {/* Números de Página */}
                   <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, diagnosis.total_pages) }, (_, i) => {
-                      let pageNum;
-                      if (diagnosis.total_pages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= diagnosis.total_pages - 2) {
-                        pageNum = diagnosis.total_pages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
+                    {Array.from(
+                      { length: Math.min(5, diagnosis.total_pages) },
+                      (_, i) => {
+                        let pageNum;
+                        if (diagnosis.total_pages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= diagnosis.total_pages - 2) {
+                          pageNum = diagnosis.total_pages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
 
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                            currentPage === pageNum
-                              ? "bg-emerald-600 text-white"
-                              : "bg-zinc-700 hover:bg-zinc-600 text-zinc-300"
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              currentPage === pageNum
+                                ? "bg-emerald-600 text-white"
+                                : "bg-zinc-700 hover:bg-zinc-600 text-zinc-300"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      }
+                    )}
                   </div>
 
                   {/* Próxima Página */}
