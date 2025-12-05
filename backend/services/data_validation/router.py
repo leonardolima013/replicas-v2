@@ -612,6 +612,29 @@ def fix_negative_weights(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao corrigir pesos negativos: {str(e)}")
 
+@router.post("/{project_id}/treatments/fix-dimensions", response_model=schemas.TreatmentFixResponse)
+def fix_dimensions(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Corrige problemas em dimensões (placeholder - implementação futura)."""
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para alterar este projeto.")
+    
+    # Por enquanto, retorna sucesso sem fazer nada
+    # TODO: Implementar lógica de correção de dimensões no duck_manager
+    return {
+        "message": "Correção de dimensões não implementada ainda",
+        "columns_affected": [],
+        "rows_affected": 0
+    }
+
 # --- ANÁLISE E REMOÇÃO DE DUPLICADAS ---
 
 @router.get("/{project_id}/duplicates/analysis", response_model=schemas.DuplicatesAnalysisResponse)
@@ -636,6 +659,35 @@ def analyze_duplicates(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao analisar duplicadas: {str(e)}")
+
+@router.get("/{project_id}/duplicates/diagnosis", response_model=schemas.DuplicatesDiagnosisResponse)
+def diagnose_duplicates(
+    project_id: str,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Diagnostica duplicatas e retorna preview paginado das linhas que serão removidas."""
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        result = duck.get_duplicates_diagnosis(
+            columns=["search_ref", "brand"],
+            page=page,
+            page_size=page_size
+        )
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao diagnosticar duplicadas: {str(e)}")
 
 @router.post("/{project_id}/duplicates/remove", response_model=schemas.TreatmentFixResponse)
 def remove_duplicates(
@@ -663,3 +715,32 @@ def remove_duplicates(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao remover duplicadas: {str(e)}")
+
+# --- ROTA: ESTATÍSTICAS MATEMÁTICAS ---
+@router.get("/{project_id}/statistics")
+def get_statistics(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Retorna estatísticas completas: resumo numérico, correlações e violações físicas."""
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        stats = duck.get_statistics()
+        
+        return {
+            "project_id": project_id,
+            "summary": stats["summary"],
+            "violations": stats["violations"],
+            "correlation": stats["correlation"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas: {str(e)}")

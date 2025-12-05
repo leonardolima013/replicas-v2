@@ -83,3 +83,11 @@ class DuplicatesAnalysisResponse(BaseModel):
     total_duplicates: int           # Total de linhas duplicadas
     duplicate_groups: int           # Número de grupos de duplicadas
     duplicates: List[DuplicateGroup]  # Lista de grupos duplicados
+
+class DuplicatesDiagnosisResponse(BaseModel):
+    total_duplicates: int           # Total de linhas que serão removidas
+    preview: List[Dict[str, Any]]   # Preview paginado das duplicatas
+    columns_used: List[str]         # Colunas usadas para identificar duplicatas
+    page: int                       # Página atual
+    page_size: int                  # Tamanho da página
+    total_pages: int                # Total de páginas
