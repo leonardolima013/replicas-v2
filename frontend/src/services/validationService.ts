@@ -113,6 +113,34 @@ export interface DuplicatesDiagnosisResponse {
   total_pages: number;
 }
 
+// Interface para correção de marca
+export interface BrandCorrection {
+  original_brand: string;
+  corrected_brand: string;
+  occurrences: number;
+}
+
+// Interface para marca desconhecida
+export interface UnknownBrand {
+  brand: string;
+  occurrences: number;
+}
+
+// Interface para análise de mapeamento de marcas
+export interface BrandAnalysisResponse {
+  total_rows: number;
+  mapped_count: number;
+  unknown_count: number;
+  top_corrections: BrandCorrection[];
+  unknown_brands: UnknownBrand[];
+}
+
+// Interface para aplicação de mapeamento de marcas
+export interface BrandApplicationResponse {
+  message: string;
+  rows_affected: number;
+}
+
 // ==================== FUNÇÕES DE API ====================
 
 /**
@@ -638,5 +666,67 @@ export const deleteProject = async (projectId: string): Promise<void> => {
       throw new Error("Sem permissão para deletar este projeto.");
     }
     throw new Error(error.response?.data?.detail || "Erro ao deletar projeto.");
+  }
+};
+
+/**
+ * Analisa o impacto do mapeamento de marcas
+ * @param projectId - ID do projeto
+ */
+export const analyzeBrands = async (
+  projectId: string
+): Promise<BrandAnalysisResponse> => {
+  try {
+    const response = await api.get<BrandAnalysisResponse>(
+      `/validation/${projectId}/brands/analysis`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão de acesso a este projeto.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao analisar mapeamento de marcas."
+    );
+  }
+};
+
+/**
+ * Aplica a normalização de marcas usando o mapeamento
+ * @param projectId - ID do projeto
+ */
+export const applyBrandNormalization = async (
+  projectId: string
+): Promise<BrandApplicationResponse> => {
+  try {
+    const response = await api.post<BrandApplicationResponse>(
+      `/validation/${projectId}/brands/apply`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para alterar este projeto.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail ||
+          "Projeto não pode ser alterado. Apenas projetos em DRAFT podem ser editados."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao aplicar normalização de marcas."
+    );
   }
 };

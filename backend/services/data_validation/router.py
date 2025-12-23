@@ -744,3 +744,83 @@ def get_statistics(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas: {str(e)}")
+
+# --- FASE 3: MAPEAMENTO DE MARCAS ---
+
+@router.get("/{project_id}/brands/analysis", response_model=schemas.BrandAnalysisResponse)
+def analyze_brands(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Analisa o impacto do mapeamento de marcas nos dados.
+    
+    Retorna métricas sobre quantas marcas serão corrigidas, quais são desconhecidas,
+    e mostra as top 5 correções que serão aplicadas.
+    """
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        analysis = duck.analyze_brands()
+        
+        return schemas.BrandAnalysisResponse(
+            total_rows=analysis["total_rows"],
+            mapped_count=analysis["mapped_count"],
+            unknown_count=analysis["unknown_count"],
+            top_corrections=[
+                schemas.BrandCorrection(**correction)
+                for correction in analysis["top_corrections"]
+            ],
+            unknown_brands=[
+                schemas.UnknownBrand(**brand)
+                for brand in analysis["unknown_brands"]
+            ]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao analisar marcas: {str(e)}")
+
+@router.post("/{project_id}/brands/apply", response_model=schemas.BrandApplicationResponse)
+def apply_brand_normalization(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Aplica a normalização de marcas usando o mapeamento.
+    
+    Executa um UPDATE massivo que corrige os nomes de marcas de acordo
+    com o arquivo de mapeamento. Apenas projetos em modo DRAFT podem ser alterados.
+    """
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para alterar este projeto.")
+    
+    # Verificar se o projeto está em modo DRAFT
+    if project.status != models.ProjectStatus.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Projeto não pode ser alterado. Status atual: {project.status.value}. Apenas projetos em DRAFT podem ser editados."
+        )
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        result = duck.apply_brand_normalization()
+        
+        return schemas.BrandApplicationResponse(
+            message=result["message"],
+            rows_affected=result["rows_affected"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao aplicar normalização de marcas: {str(e)}")

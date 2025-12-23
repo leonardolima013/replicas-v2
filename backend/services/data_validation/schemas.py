@@ -91,3 +91,25 @@ class DuplicatesDiagnosisResponse(BaseModel):
     page: int                       # Página atual
     page_size: int                  # Tamanho da página
     total_pages: int                # Total de páginas
+
+# --- SCHEMAS PARA MAPEAMENTO DE MARCAS ---
+
+class BrandCorrection(BaseModel):
+    original_brand: str             # Marca original (incorreta)
+    corrected_brand: str            # Marca corrigida (normalizada)
+    occurrences: int                # Número de ocorrências
+
+class UnknownBrand(BaseModel):
+    brand: str                      # Nome da marca desconhecida
+    occurrences: int                # Número de ocorrências
+
+class BrandAnalysisResponse(BaseModel):
+    total_rows: int                 # Total de linhas na tabela
+    mapped_count: int               # Linhas com marcas que serão corrigidas
+    unknown_count: int              # Linhas com marcas desconhecidas (não no mapeamento)
+    top_corrections: List[BrandCorrection]  # Top 5 correções que serão aplicadas
+    unknown_brands: List[UnknownBrand]      # Lista de marcas desconhecidas
+
+class BrandApplicationResponse(BaseModel):
+    message: str                    # Mensagem de sucesso
+    rows_affected: int              # Número de linhas afetadas pelo UPDATE

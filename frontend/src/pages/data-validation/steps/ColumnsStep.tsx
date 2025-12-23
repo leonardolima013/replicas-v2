@@ -107,8 +107,8 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
   if (loading) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <Loader2 className="w-12 h-12 text-primary-500 animate-spin mb-4" />
-        <p className="text-gray-600">Analisando colunas...</p>
+        <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
+        <p className="text-zinc-400">Analisando colunas...</p>
       </div>
     );
   }
@@ -117,15 +117,18 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
   if (error) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <div className="bg-red-50 border border-red-200 rounded-card p-6 max-w-md">
+        <div className="bg-rose-900/20 border border-rose-500 rounded-lg p-6 max-w-md">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-6 h-6 text-rose-500 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-red-900 mb-1">
+              <h3 className="font-semibold text-rose-400 mb-1">
                 Erro ao Carregar Análise
               </h3>
-              <p className="text-sm text-red-700 mb-4">{error}</p>
-              <button onClick={fetchAnalysis} className="btn-primary text-sm">
+              <p className="text-sm text-rose-300 mb-4">{error}</p>
+              <button
+                onClick={fetchAnalysis}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors text-sm"
+              >
                 Tentar Novamente
               </button>
             </div>
@@ -139,7 +142,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
   if (!analysis) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[400px]">
-        <p className="text-gray-600">Nenhuma análise disponível.</p>
+        <p className="text-zinc-400">Nenhuma análise disponível.</p>
       </div>
     );
   }
@@ -176,7 +179,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
   const getColumnBadge = (type: "required" | "optional" | "extra") => {
     if (type === "required") {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
           <CheckCircle2 className="w-3 h-3" />
           Obrigatória
         </span>
@@ -184,14 +187,14 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
     }
     if (type === "optional") {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
           <AlertTriangle className="w-3 h-3" />
           Opcional
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-500/20 text-rose-300 border border-rose-500/30">
         <XCircle className="w-3 h-3" />
         Não Listada
       </span>
@@ -202,10 +205,10 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
     <div className="p-6">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+        <h2 className="text-2xl font-bold text-zinc-100 mb-2">
           Tratamento de Estrutura
         </h2>
-        <p className="text-gray-600">
+        <p className="text-zinc-500">
           Análise e mapeamento de colunas do projeto
         </p>
       </div>
@@ -213,21 +216,21 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
       {/* Informações sobre Colunas Esperadas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Colunas Obrigatórias */}
-        <div className="card bg-green-50 border-2 border-green-200">
+        <div className="bg-emerald-900/20 border-2 border-emerald-500/50 rounded-lg p-6">
           <div className="flex items-center gap-2 mb-4">
-            <CheckCircle2 className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-green-900">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <h3 className="text-lg font-semibold text-emerald-400">
               Colunas Obrigatórias
             </h3>
           </div>
-          <p className="text-sm text-green-700 mb-3">
+          <p className="text-sm text-emerald-500 mb-3">
             Estas colunas devem estar presentes no seu arquivo:
           </p>
           <div className="flex flex-wrap gap-2">
             {analysis?.required.map((col) => (
               <span
                 key={col}
-                className="px-3 py-1.5 bg-green-100 text-green-800 rounded-full text-sm font-medium"
+                className="px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-sm font-medium"
               >
                 {col}
               </span>
@@ -236,21 +239,21 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
         </div>
 
         {/* Colunas Opcionais */}
-        <div className="card bg-yellow-50 border-2 border-yellow-200">
+        <div className="bg-yellow-900/20 border-2 border-yellow-500/50 rounded-lg p-6">
           <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-5 h-5 text-yellow-600" />
-            <h3 className="text-lg font-semibold text-yellow-900">
+            <AlertTriangle className="w-5 h-5 text-yellow-400" />
+            <h3 className="text-lg font-semibold text-yellow-400">
               Colunas Opcionais
             </h3>
           </div>
-          <p className="text-sm text-yellow-700 mb-3">
+          <p className="text-sm text-yellow-500 mb-3">
             Estas colunas são reconhecidas, mas não obrigatórias:
           </p>
           <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
             {analysis?.optional.map((col) => (
               <span
                 key={col}
-                className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium"
+                className="px-3 py-1.5 bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 rounded-full text-sm font-medium"
               >
                 {col}
               </span>
@@ -261,16 +264,16 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
 
       {/* Resumo de Colunas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="card bg-green-50 border border-green-200">
+        <div className="bg-emerald-900/20 border border-emerald-500/50 rounded-lg p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <CheckCircle2 className="w-6 h-6 text-green-600" />
+            <div className="p-2 bg-emerald-500/20 rounded-lg">
+              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
             </div>
             <div>
-              <p className="text-sm text-green-700 font-medium">
+              <p className="text-sm text-emerald-500 font-medium">
                 Colunas Obrigatórias
               </p>
-              <p className="text-2xl font-bold text-green-900">
+              <p className="text-2xl font-bold text-emerald-400">
                 {
                   analysis.required.filter((r) => analysis.present.includes(r))
                     .length
@@ -281,16 +284,16 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
           </div>
         </div>
 
-        <div className="card bg-yellow-50 border border-yellow-200">
+        <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <AlertTriangle className="w-6 h-6 text-yellow-600" />
+            <div className="p-2 bg-yellow-500/20 rounded-lg">
+              <AlertTriangle className="w-6 h-6 text-yellow-400" />
             </div>
             <div>
-              <p className="text-sm text-yellow-700 font-medium">
+              <p className="text-sm text-yellow-500 font-medium">
                 Colunas Opcionais
               </p>
-              <p className="text-2xl font-bold text-yellow-900">
+              <p className="text-2xl font-bold text-yellow-400">
                 {
                   analysis.optional.filter((o) => analysis.present.includes(o))
                     .length
@@ -301,16 +304,16 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
           </div>
         </div>
 
-        <div className="card bg-red-50 border border-red-200">
+        <div className="bg-rose-900/20 border border-rose-500/50 rounded-lg p-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <XCircle className="w-6 h-6 text-red-600" />
+            <div className="p-2 bg-rose-500/20 rounded-lg">
+              <XCircle className="w-6 h-6 text-rose-400" />
             </div>
             <div>
-              <p className="text-sm text-red-700 font-medium">
+              <p className="text-sm text-rose-500 font-medium">
                 Colunas Não Listadas
               </p>
-              <p className="text-2xl font-bold text-red-900">
+              <p className="text-2xl font-bold text-rose-400">
                 {analysis.extra.length}
               </p>
             </div>
@@ -320,16 +323,16 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
 
       {/* Mensagem de Sucesso */}
       {successMessage && (
-        <div className="mb-6 bg-green-50 border border-green-200 rounded-card p-4 flex items-start gap-3">
-          <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+        <div className="mb-6 bg-emerald-900/20 border border-emerald-500 rounded-lg p-4 flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-sm text-green-700 font-medium">
+            <p className="text-sm text-emerald-500 font-medium">
               {successMessage}
             </p>
           </div>
           <button
             onClick={() => setSuccessMessage(null)}
-            className="text-green-600 hover:text-green-700 font-medium text-sm"
+            className="text-emerald-400 hover:text-emerald-300 font-medium text-sm"
           >
             Fechar
           </button>
@@ -337,27 +340,30 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
       )}
 
       {/* Tabela de Colunas */}
-      <div className="card p-0 overflow-hidden mb-6">
+      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg overflow-hidden mb-6">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-zinc-700">
+            <thead className="bg-zinc-900/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                   Coluna Atual
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-zinc-400 uppercase tracking-wider">
                   Mapear Para
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-zinc-700">
               {allColumns.map((column) => (
-                <tr key={column.currentName} className="hover:bg-gray-50">
+                <tr
+                  key={column.currentName}
+                  className="hover:bg-zinc-700/30 transition-colors"
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="text-sm font-medium text-zinc-100">
                       {column.currentName}
                     </span>
                   </td>
@@ -375,7 +381,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
                           )
                         }
                         disabled={readOnly}
-                        className="input-base text-sm w-64 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        className="bg-zinc-700 border border-zinc-600 text-zinc-100 rounded-lg px-3 py-2 text-sm w-64 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 disabled:bg-zinc-800 disabled:cursor-not-allowed"
                       >
                         <option value="">Selecione uma coluna...</option>
                         {availableTargets.map((target) => (
@@ -385,7 +391,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
                         ))}
                       </select>
                     ) : (
-                      <span className="text-sm text-gray-500 italic">
+                      <span className="text-sm text-zinc-500 italic">
                         Coluna reconhecida
                       </span>
                     )}
@@ -407,7 +413,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
               Object.keys(columnMappings).filter((k) => columnMappings[k])
                 .length === 0
             }
-            className="btn-primary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold flex items-center gap-2 transition-colors"
           >
             {saving ? (
               <>
@@ -425,7 +431,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
       )}
 
       {readOnly && (
-        <div className="text-center text-sm text-gray-500 py-4">
+        <div className="text-center text-sm text-zinc-500 py-4">
           <AlertCircle className="w-5 h-5 inline mr-2" />
           Modo somente leitura - Para editar, cancele o envio do projeto
         </div>

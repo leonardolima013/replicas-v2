@@ -4,8 +4,10 @@ FROM node:20-alpine AS frontend-builder
 # Definir diretório de trabalho
 WORKDIR /frontend
 
-# Copiar arquivos de configuração do frontend
+# Copiar package.json e package-lock.json
 COPY frontend/package*.json ./
+
+# Copiar arquivos de configuração necessários para o build
 COPY frontend/vite.config.ts ./
 COPY frontend/postcss.config.js ./
 COPY frontend/tsconfig*.json ./
@@ -14,18 +16,14 @@ COPY frontend/index.html ./
 # Instalar dependências
 RUN npm install
 
-# Copiar código fonte do frontend
+# Copiar código-fonte
 COPY frontend/src ./src
 
-# Build do frontend (gera a pasta /frontend/dist)
+# Build da aplicação
 RUN npm run build
 
-# ===== ESTÁGIO 2: PRODUÇÃO (BACKEND + FRONTEND) =====
+# ===== ESTÁGIO 2: IMAGEM FINAL =====
 FROM python:3.11.9-slim
-
-# Definir variáveis de ambiente
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
 
 # Definir diretório de trabalho
 WORKDIR /app
@@ -36,18 +34,23 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar e instalar dependências Python
+# Copiar requirements.txt
 COPY requirements.txt .
+
+# Instalar dependências Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar código do backend
 COPY backend ./backend
 
-# Copiar arquivos do frontend buildado do ESTÁGIO 1
+# Copiar arquivo de mapeamento de marcas
+COPY mapeamento-marcas-invertido.json ./
+
+# Copiar o frontend buildado do estágio anterior
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
-# Expor a porta 8000
+# Expor porta
 EXPOSE 8000
 
-# Comando para rodar a aplicação
+# Comando para iniciar a aplicação
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

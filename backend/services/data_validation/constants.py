@@ -4,7 +4,7 @@ OPTIONAL_COLUMNS = {
     "barcode", "ncm", "application", "net_weight", "gross_weight",
     "born_at", "deprecated_at", "catalog_id", "height", "width",
     "depth", "url_thumb", "notes", "file_high", "file_low",
-    "file_medium", "file_water_mark", "position"
+    "file_medium", "file_water_mark", "position","similarity",
 }
 
 # Agrupamentos para tratamento automatizado

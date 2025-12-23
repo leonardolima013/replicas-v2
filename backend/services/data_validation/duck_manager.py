@@ -2,6 +2,7 @@ import duckdb
 import os
 import pandas as pd
 import re
+from backend.services.data_validation.mapping_service import get_brand_mapping_service
 
 # Pasta onde os ficheiros .duckdb ficam guardados
 TEMP_DIR = "temp_data"
@@ -59,6 +60,11 @@ class DuckSession:
     def _get_conn(self, read_only=False):
         """Abre uma conexão segura com o ficheiro."""
         return duckdb.connect(self.db_path, read_only=read_only)
+    
+    def _get_columns_from_conn(self, conn, table_name: str = "raw_data"):
+        """Retorna colunas usando uma conexão existente (evita conflitos)."""
+        columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+        return [col[0] for col in columns_info]
 
     def load_csv_auto(self, csv_path: str, table_name: str = "raw_data"):
         """Usa-se apenas no Upload inicial."""
@@ -877,6 +883,215 @@ class DuckSession:
                 "summary": summary_results,
                 "violations": violations,
                 "correlation": correlation
+            }
+        finally:
+            conn.close()
+
+    # --- FASE 3: MAPEAMENTO DE MARCAS ---
+
+    def analyze_brands(self, table_name: str = "raw_data"):
+        """
+        Analisa o impacto do mapeamento de marcas nos dados.
+        
+        Retorna métricas de diagnóstico:
+        - total_rows: Total de linhas na tabela
+        - mapped_count: Quantas linhas têm marcas que estão no mapeamento (serão corrigidas)
+        - unknown_count: Quantas linhas têm marcas que não estão no mapeamento
+        - top_corrections: As 5 principais marcas que serão alteradas
+        - unknown_brands: Lista das marcas desconhecidas com suas contagens
+        
+        Returns:
+            dict: Dicionário com métricas de diagnóstico
+        """
+        conn = self._get_conn(read_only=True)
+        try:
+            # Verificar se a coluna brand existe - usando a conexão existente
+            columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+            current_columns = set([col[0] for col in columns_info])
+            
+            if "brand" not in current_columns:
+                return {
+                    "total_rows": 0,
+                    "mapped_count": 0,
+                    "unknown_count": 0,
+                    "top_corrections": [],
+                    "unknown_brands": []
+                }
+            
+            # Obter o DataFrame de mapeamento do serviço
+            mapping_service = get_brand_mapping_service()
+            mapping_df = mapping_service.get_mapping_df()
+            
+            # Criar tabela temporária com o mapeamento
+            # Primeiro, criar os valores para o INSERT
+            values_list = []
+            for _, row in mapping_df.iterrows():
+                # Escapar aspas simples nas strings
+                source_escaped = row['source'].replace("'", "''")
+                target_escaped = row['target'].replace("'", "''")
+                values_list.append(f"('{source_escaped}', '{target_escaped}')")
+            values_str = ", ".join(values_list)
+            
+            # Criar tabela temporária
+            conn.execute("DROP TABLE IF EXISTS brand_map")
+            conn.execute("""
+                CREATE TEMP TABLE brand_map (
+                    source VARCHAR,
+                    target VARCHAR
+                )
+            """)
+            conn.execute(f"INSERT INTO brand_map VALUES {values_str}")
+            
+            # 1. Total de linhas
+            total_query = f"SELECT COUNT(*) FROM {table_name}"
+            total_rows = conn.execute(total_query).fetchone()[0]
+            
+            # 2. Linhas com marcas que estão no mapeamento (serão corrigidas)
+            # Apenas contamos marcas que realmente serão alteradas (source != target)
+            mapped_query = f"""
+                SELECT COUNT(DISTINCT r.rowid) as mapped_count
+                FROM {table_name} r
+                INNER JOIN brand_map bm 
+                    ON UPPER(TRIM(r.brand)) = bm.source
+                WHERE r.brand IS NOT NULL 
+                    AND r.brand != ''
+                    AND bm.source != bm.target
+            """
+            mapped_count = conn.execute(mapped_query).fetchone()[0]
+            
+            # 3. Linhas com marcas que NÃO estão no mapeamento
+            unknown_query = f"""
+                SELECT COUNT(*) as unknown_count
+                FROM {table_name} r
+                WHERE r.brand IS NOT NULL 
+                    AND r.brand != ''
+                    AND UPPER(TRIM(r.brand)) NOT IN (SELECT source FROM brand_map)
+            """
+            unknown_count = conn.execute(unknown_query).fetchone()[0]
+            
+            # 4. Top 5 correções (marcas que serão mais alteradas)
+            # Apenas mostramos marcas que realmente serão alteradas
+            top_corrections_query = f"""
+                SELECT 
+                    r.brand as original_brand,
+                    bm.target as corrected_brand,
+                    COUNT(*) as occurrences
+                FROM {table_name} r
+                INNER JOIN brand_map bm 
+                    ON UPPER(TRIM(r.brand)) = bm.source
+                WHERE r.brand IS NOT NULL 
+                    AND r.brand != ''
+                    AND bm.source != bm.target
+                GROUP BY r.brand, bm.target
+                ORDER BY occurrences DESC
+                LIMIT 5
+            """
+            top_corrections_df = conn.execute(top_corrections_query).fetchdf()
+            top_corrections = top_corrections_df.to_dict(orient="records")
+            
+            # 5. Lista de marcas desconhecidas (top 20)
+            unknown_brands_query = f"""
+                SELECT 
+                    UPPER(TRIM(r.brand)) as brand,
+                    COUNT(*) as occurrences
+                FROM {table_name} r
+                WHERE r.brand IS NOT NULL 
+                    AND r.brand != ''
+                    AND UPPER(TRIM(r.brand)) NOT IN (SELECT source FROM brand_map)
+                GROUP BY UPPER(TRIM(r.brand))
+                ORDER BY occurrences DESC
+                LIMIT 20
+            """
+            unknown_brands_df = conn.execute(unknown_brands_query).fetchdf()
+            unknown_brands = unknown_brands_df.to_dict(orient="records")
+            
+            return {
+                "total_rows": total_rows,
+                "mapped_count": mapped_count,
+                "unknown_count": unknown_count,
+                "top_corrections": top_corrections,
+                "unknown_brands": unknown_brands
+            }
+        finally:
+            conn.close()
+
+    def apply_brand_normalization(self, table_name: str = "raw_data"):
+        """
+        Aplica a normalização de marcas usando o mapeamento.
+        
+        Executa um UPDATE massivo que corrige os nomes de marcas
+        de acordo com o mapeamento carregado.
+        
+        Returns:
+            dict: Dicionário com número de linhas afetadas
+        """
+        conn = self._get_conn(read_only=False)
+        try:
+            # Verificar se a coluna brand existe - usando a conexão existente
+            columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+            current_columns = set([col[0] for col in columns_info])
+            
+            if "brand" not in current_columns:
+                return {
+                    "rows_affected": 0,
+                    "message": "Coluna 'brand' não encontrada na tabela"
+                }
+            
+            # Obter o DataFrame de mapeamento do serviço
+            mapping_service = get_brand_mapping_service()
+            mapping_df = mapping_service.get_mapping_df()
+            
+            # Criar tabela temporária com o mapeamento
+            # Primeiro, criar os valores para o INSERT
+            values_list = []
+            for _, row in mapping_df.iterrows():
+                # Escapar aspas simples nas strings
+                source_escaped = row['source'].replace("'", "''")
+                target_escaped = row['target'].replace("'", "''")
+                values_list.append(f"('{source_escaped}', '{target_escaped}')")
+            values_str = ", ".join(values_list)
+            
+            # Criar tabela temporária
+            conn.execute("DROP TABLE IF EXISTS brand_map")
+            conn.execute("""
+                CREATE TEMP TABLE brand_map (
+                    source VARCHAR,
+                    target VARCHAR
+                )
+            """)
+            conn.execute(f"INSERT INTO brand_map VALUES {values_str}")
+            
+            # Contar quantas linhas serão afetadas
+            # Apenas contamos marcas que realmente serão alteradas (source != target)
+            count_query = f"""
+                SELECT COUNT(*) 
+                FROM {table_name}
+                WHERE UPPER(TRIM(brand)) IN (
+                    SELECT source FROM brand_map WHERE source != target
+                )
+            """
+            rows_to_update = conn.execute(count_query).fetchone()[0]
+            
+            # Executar o UPDATE massivo
+            # Apenas atualizamos marcas que realmente precisam ser alteradas
+            update_query = f"""
+                UPDATE {table_name}
+                SET brand = (
+                    SELECT bm.target 
+                    FROM brand_map bm 
+                    WHERE bm.source = UPPER(TRIM({table_name}.brand))
+                        AND bm.source != bm.target
+                )
+                WHERE UPPER(TRIM(brand)) IN (
+                    SELECT source FROM brand_map WHERE source != target
+                )
+            """
+            
+            conn.execute(update_query)
+            
+            return {
+                "rows_affected": rows_to_update,
+                "message": f"Normalização de marcas aplicada com sucesso"
             }
         finally:
             conn.close()
