@@ -169,53 +169,54 @@ export default function AdminValidationReview() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="p-8">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-soft">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/admin/validation"
-              className="btn-secondary flex items-center gap-2"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Voltar
-            </Link>
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 tracking-wide">
-                Revisão de Projeto
-              </h1>
-              {project && (
-                <p className="text-sm text-gray-500 mt-1">
-                  {project.original_filename} • Enviado por{" "}
-                  {project.owner_username} em {formatDate(project.created_at)}
-                </p>
-              )}
-            </div>
-          </div>
+      <div className="mb-6">
+        <div className="flex items-center gap-4 mb-4">
+          <Link
+            to="/admin/validation"
+            className="btn-secondary flex items-center gap-2"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Voltar
+          </Link>
         </div>
-      </header>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-wide">
+            Revisão de Projeto
+          </h1>
+          {project && (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {project.original_filename} • Enviado por {project.owner_username}{" "}
+              em {formatDate(project.created_at)}
+            </p>
+          )}
+        </div>
+      </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Loading State */}
-        {loading && (
-          <div className="card text-center py-16">
-            <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
-            <p className="text-gray-600">Carregando dados do projeto...</p>
-          </div>
-        )}
+      {/* Loading State */}
+      {loading && (
+        <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 text-center py-16">
+          <Loader2 className="w-12 h-12 text-primary-500 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 dark:text-gray-400">
+            Carregando dados do projeto...
+          </p>
+        </div>
+      )}
 
-        {/* Error State */}
-        {error && !loading && (
-          <div className="card bg-red-50 border border-red-200">
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 p-6">
+          <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 p-4 rounded-card">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-red-700 font-medium">
+                <p className="text-sm text-red-700 dark:text-red-300 font-medium">
                   Erro ao carregar projeto
                 </p>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+                <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                  {error}
+                </p>
                 <button
                   onClick={fetchProjectData}
                   className="btn-secondary mt-4 text-sm"
@@ -225,153 +226,163 @@ export default function AdminValidationReview() {
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Preview Content */}
-        {!loading && !error && project && previewData && (
-          <>
-            {/* Info Card */}
-            <div className="card mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Total de Linhas</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {previewData.total_rows.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Total de Colunas</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {previewData.columns.length}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 mb-1">Status</p>
-                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                    Aguardando Aprovação
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Data Preview */}
-            <div className="card p-0 overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Visualização dos Dados (Somente Leitura)
-                </h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Mostrando {(currentPage - 1) * pageSize + 1} -{" "}
-                  {Math.min(currentPage * pageSize, previewData.total_rows)} de{" "}
-                  {previewData.total_rows.toLocaleString()} linhas
+      {/* Preview Content */}
+      {!loading && !error && project && previewData && (
+        <>
+          {/* Info Card */}
+          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Total de Linhas
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {previewData.total_rows.toLocaleString()}
                 </p>
               </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Total de Colunas
+                </p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {previewData.columns.length}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                  Status
+                </p>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                  Aguardando Aprovação
+                </span>
+              </div>
+            </div>
+          </div>
 
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-100">
-                    <tr>
+          {/* Data Preview */}
+          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Visualização dos Dados (Somente Leitura)
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                Mostrando {(currentPage - 1) * pageSize + 1} -{" "}
+                {Math.min(currentPage * pageSize, previewData.total_rows)} de{" "}
+                {previewData.total_rows.toLocaleString()} linhas
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                <thead className="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    {previewData.columns.map((column) => (
+                      <th
+                        key={column}
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                      >
+                        {column}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                  {previewData.rows.map((row, idx) => (
+                    <tr
+                      key={idx}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
+                    >
                       {previewData.columns.map((column) => (
-                        <th
+                        <td
                           key={column}
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider whitespace-nowrap"
+                          className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap"
                         >
-                          {column}
-                        </th>
+                          {row[column] !== null && row[column] !== undefined ? (
+                            String(row[column])
+                          ) : (
+                            <span className="text-gray-400 dark:text-gray-600 italic">
+                              null
+                            </span>
+                          )}
+                        </td>
                       ))}
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {previewData.rows.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        {previewData.columns.map((column) => (
-                          <td
-                            key={column}
-                            className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap"
-                          >
-                            {row[column] !== null &&
-                            row[column] !== undefined ? (
-                              String(row[column])
-                            ) : (
-                              <span className="text-gray-400 italic">null</span>
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Anterior
-                  </button>
-                  <span className="text-sm text-gray-600">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Próxima
-                  </button>
-                </div>
-              )}
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            {/* Action Buttons */}
-            <div className="card mt-6">
-              <div className="flex items-center justify-between gap-4">
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
                 <button
-                  onClick={handleDownloadCSV}
-                  className="btn-secondary flex items-center gap-2"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Download className="w-5 h-5" />
-                  Baixar CSV
+                  Anterior
+                </button>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Página {currentPage} de {totalPages}
+                </span>
+                <button
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Próxima
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mt-6">
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={handleDownloadCSV}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                Baixar CSV
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleReject}
+                  disabled={actionLoading}
+                  className="btn-secondary bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {actionLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <XCircle className="w-5 h-5" />
+                  )}
+                  Rejeitar
                 </button>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleReject}
-                    disabled={actionLoading}
-                    className="btn-secondary bg-red-50 text-red-700 border-red-200 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {actionLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <XCircle className="w-5 h-5" />
-                    )}
-                    Rejeitar
-                  </button>
-
-                  <button
-                    onClick={handleApprove}
-                    disabled={actionLoading}
-                    className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {actionLoading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <CheckCircle className="w-5 h-5" />
-                    )}
-                    Aprovar e Publicar no S3
-                  </button>
-                </div>
+                <button
+                  onClick={handleApprove}
+                  disabled={actionLoading}
+                  className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {actionLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <CheckCircle className="w-5 h-5" />
+                  )}
+                  Aprovar e Publicar no S3
+                </button>
               </div>
             </div>
-          </>
-        )}
-      </main>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -201,7 +201,7 @@ export default function BrandMappingStep({
                 hasUnknown ? "text-orange-400" : "text-zinc-400"
               }`}
             >
-              Marcas Desconhecidas
+              Peças de Marcas Desconhecidas
             </h3>
           </div>
           <p
@@ -359,8 +359,8 @@ export default function BrandMappingStep({
                   </h4>
                   <p className="text-sm text-zinc-400 leading-relaxed">
                     Foram encontradas {analysis.unknown_count.toLocaleString()}{" "}
-                    marcas que não constam no mapeamento oficial. Estas marcas
-                    permanecerão com seus nomes originais.
+                    peças de marcas que não constam no mapeamento oficial. Estas
+                    marcas permanecerão com seus nomes originais.
                   </p>
                   <p className="text-sm text-orange-500 mt-3 font-medium">
                     💡 Considere atualizar o arquivo de mapeamento ou verificar
