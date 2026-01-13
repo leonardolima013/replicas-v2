@@ -275,154 +275,155 @@ export default function AdminValidationReview() {
             <>
               {/* Info Card */}
               <div className="bg-white dark:bg-gray-900 shadow-soft border border-gray-100 dark:border-gray-800 border-t-0 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                  Total de Linhas
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {previewData.total_rows.toLocaleString()}
-                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                      Total de Linhas
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {previewData.total_rows.toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                      Total de Colunas
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {previewData.columns.length}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
+                      Status
+                    </p>
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+                      Aguardando Aprovação
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                  Total de Colunas
-                </p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {previewData.columns.length}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                  Status
-                </p>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
-                  Aguardando Aprovação
-                </span>
-              </div>
-            </div>
-          </div>
 
-          {/* Data Preview */}
-          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Visualização dos Dados (Somente Leitura)
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                Mostrando {(currentPage - 1) * pageSize + 1} -{" "}
-                {Math.min(currentPage * pageSize, previewData.total_rows)} de{" "}
-                {previewData.total_rows.toLocaleString()} linhas
-              </p>
-            </div>
+              {/* Data Preview */}
+              <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Visualização dos Dados (Somente Leitura)
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    Mostrando {(currentPage - 1) * pageSize + 1} -{" "}
+                    {Math.min(currentPage * pageSize, previewData.total_rows)}{" "}
+                    de {previewData.total_rows.toLocaleString()} linhas
+                  </p>
+                </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-                <thead className="bg-gray-100 dark:bg-gray-800">
-                  <tr>
-                    {previewData.columns.map((column) => (
-                      <th
-                        key={column}
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
-                      >
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-                  {previewData.rows.map((row, idx) => (
-                    <tr
-                      key={idx}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800"
-                    >
-                      {previewData.columns.map((column) => (
-                        <td
-                          key={column}
-                          className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap"
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+                    <thead className="bg-gray-100 dark:bg-gray-800">
+                      <tr>
+                        {previewData.columns.map((column) => (
+                          <th
+                            key={column}
+                            className="px-4 py-3 text-left text-xs font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wider whitespace-nowrap"
+                          >
+                            {column}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
+                      {previewData.rows.map((row, idx) => (
+                        <tr
+                          key={idx}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800"
                         >
-                          {row[column] !== null && row[column] !== undefined ? (
-                            String(row[column])
-                          ) : (
-                            <span className="text-gray-400 dark:text-gray-600 italic">
-                              null
-                            </span>
-                          )}
-                        </td>
+                          {previewData.columns.map((column) => (
+                            <td
+                              key={column}
+                              className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap"
+                            >
+                              {row[column] !== null &&
+                              row[column] !== undefined ? (
+                                String(row[column])
+                              ) : (
+                                <span className="text-gray-400 dark:text-gray-600 italic">
+                                  null
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Anterior
-                </button>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Página {currentPage} de {totalPages}
-                </span>
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Próxima
-                </button>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      className="btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-            {/* Action Buttons */}
-            <div className="bg-white dark:bg-gray-900 rounded-b-card shadow-soft border border-gray-100 dark:border-gray-800 border-t p-6 mt-6">
-              <div className="flex items-center justify-between gap-4">
-              <button
-                onClick={handleDownloadCSV}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Download className="w-5 h-5" />
-                Baixar CSV
-              </button>
+              {/* Action Buttons */}
+              <div className="bg-white dark:bg-gray-900 rounded-b-card shadow-soft border border-gray-100 dark:border-gray-800 border-t p-6 mt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <button
+                    onClick={handleDownloadCSV}
+                    className="btn-secondary flex items-center gap-2"
+                  >
+                    <Download className="w-5 h-5" />
+                    Baixar CSV
+                  </button>
 
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleReject}
-                  disabled={actionLoading}
-                  className="btn-secondary bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {actionLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <XCircle className="w-5 h-5" />
-                  )}
-                  Rejeitar
-                </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleReject}
+                      disabled={actionLoading}
+                      className="btn-secondary bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <XCircle className="w-5 h-5" />
+                      )}
+                      Rejeitar
+                    </button>
 
-                <button
-                  onClick={handleApprove}
-                  disabled={actionLoading}
-                  className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {actionLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <CheckCircle className="w-5 h-5" />
-                  )}
-                  Aprovar e Publicar no S3
-                </button>
+                    <button
+                      onClick={handleApprove}
+                      disabled={actionLoading}
+                      className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-5 h-5" />
+                      )}
+                      Aprovar e Publicar no S3
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          </>
+            </>
           )}
 
           {/* Tab Content: Quality Report */}
@@ -431,7 +432,7 @@ export default function AdminValidationReview() {
               <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 border-t-0">
                 <QualityReportTab projectId={projectId} />
               </div>
-              
+
               {/* Action Buttons também na aba de qualidade */}
               <div className="bg-white dark:bg-gray-900 rounded-b-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mt-6">
                 <div className="flex items-center justify-between gap-4">

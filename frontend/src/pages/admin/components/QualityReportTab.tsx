@@ -283,9 +283,7 @@ export default function QualityReportTab({ projectId }: QualityReportTabProps) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">
-                    NCM:
-                  </span>
+                  <span className="text-gray-600 dark:text-gray-400">NCM:</span>
                   <span className="font-medium text-gray-900 dark:text-white">
                     {report.data_quality.ncm_issues}
                   </span>
@@ -412,9 +410,7 @@ export default function QualityReportTab({ projectId }: QualityReportTabProps) {
               {report.duplicates.found === 0 ? (
                 <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                   <CheckCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium">
-                    Sem duplicatas
-                  </span>
+                  <span className="text-sm font-medium">Sem duplicatas</span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
