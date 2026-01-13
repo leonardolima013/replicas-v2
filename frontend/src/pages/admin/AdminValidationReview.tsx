@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Loader2,
@@ -9,12 +9,15 @@ import {
   Download,
   FileText,
   BarChart3,
+  Upload,
 } from "lucide-react";
 import * as validationService from "../../services/validationService";
 import QualityReportTab from "./components/QualityReportTab";
+import PublishConfigTab from "./components/PublishConfigTab";
 
 export default function AdminValidationReview() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
 
   const [project, setProject] = useState<validationService.Project | null>(
     null
@@ -25,7 +28,9 @@ export default function AdminValidationReview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"preview" | "quality">("preview");
+  const [activeTab, setActiveTab] = useState<"preview" | "quality" | "publish">(
+    "preview"
+  );
 
   const pageSize = 50;
 
@@ -100,33 +105,6 @@ export default function AdminValidationReview() {
       document.body.removeChild(a);
     } catch (err: any) {
       alert(err.message || "Erro ao baixar CSV");
-    }
-  };
-
-  const handleApprove = async () => {
-    if (!projectId) return;
-
-    if (
-      !confirm(
-        "Tem certeza que deseja APROVAR este projeto? O status será alterado para PUBLICADO."
-      )
-    ) {
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      // TODO: Implementar endpoint de aprovação no backend
-      // Por enquanto, apenas exibir mensagem
-      alert(
-        "Funcionalidade de aprovação será implementada no backend. Status: PENDING → DONE"
-      );
-      // await validationService.approveProject(projectId);
-      // navigate("/admin/validation");
-    } catch (err: any) {
-      alert(err.message || "Erro ao aprovar projeto");
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -266,6 +244,20 @@ export default function AdminValidationReview() {
               >
                 <BarChart3 className="w-5 h-5" />
                 Relatório de Qualidade
+              </button>
+              <button
+                onClick={() => setActiveTab("publish")}
+                className={`
+                  flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all
+                  border-b-2 ${
+                    activeTab === "publish"
+                      ? "border-green-600 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }
+                `}
+              >
+                <Upload className="w-5 h-5" />
+                Publicar na Hubbi
               </button>
             </div>
           </div>
@@ -409,16 +401,11 @@ export default function AdminValidationReview() {
                     </button>
 
                     <button
-                      onClick={handleApprove}
-                      disabled={actionLoading}
-                      className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      onClick={() => setActiveTab("publish")}
+                      className="btn-primary bg-green-600 hover:bg-green-700 flex items-center gap-2"
                     >
-                      {actionLoading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <CheckCircle className="w-5 h-5" />
-                      )}
-                      Aprovar e Publicar no S3
+                      <Upload className="w-5 h-5" />
+                      Ir para Publicação
                     </button>
                   </div>
                 </div>
@@ -433,7 +420,7 @@ export default function AdminValidationReview() {
                 <QualityReportTab projectId={projectId} />
               </div>
 
-              {/* Action Buttons também na aba de qualidade */}
+              {/* Action Buttons na aba de qualidade */}
               <div className="bg-white dark:bg-gray-900 rounded-b-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mt-6">
                 <div className="flex items-center justify-between gap-4">
                   <button
@@ -459,21 +446,31 @@ export default function AdminValidationReview() {
                     </button>
 
                     <button
-                      onClick={handleApprove}
-                      disabled={actionLoading}
-                      className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      onClick={() => setActiveTab("publish")}
+                      className="btn-primary bg-green-600 hover:bg-green-700 flex items-center gap-2"
                     >
-                      {actionLoading ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <CheckCircle className="w-5 h-5" />
-                      )}
-                      Aprovar e Publicar no S3
+                      <Upload className="w-5 h-5" />
+                      Ir para Publicação
                     </button>
                   </div>
                 </div>
               </div>
             </>
+          )}
+
+          {/* Tab Content: Publish */}
+          {activeTab === "publish" && projectId && (
+            <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 border-t-0">
+              <PublishConfigTab
+                projectId={projectId}
+                onPublishSuccess={() => {
+                  // Redirecionar para lista após sucesso
+                  setTimeout(() => {
+                    navigate("/admin/validation");
+                  }, 3000);
+                }}
+              />
+            </div>
           )}
         </>
       )}

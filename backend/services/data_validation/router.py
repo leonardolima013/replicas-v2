@@ -1024,3 +1024,156 @@ def get_quality_report(
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório de qualidade: {str(e)}")
+
+
+# ============================================================================
+# PUBLICAÇÃO PARA BANCO DE PRODUÇÃO
+# ============================================================================
+
+from backend.services.data_validation import publish_schemas, publish_service
+from backend.services.data_validation.production_db import test_production_connection
+
+@router.get("/{project_id}/publish/preview", response_model=publish_schemas.PublishPreviewResponse)
+def get_publish_preview(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Preview da publicação: mostra o que será criado/atualizado no banco de produção.
+    Apenas admins podem acessar este endpoint.
+    """
+    # Verificar se é admin
+    if current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem publicar dados")
+    
+    # Verificar se projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar se está em status PENDING_REVIEW
+    if project.status != models.ProjectStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Projeto deve estar em status PENDING_REVIEW para publicação. Status atual: {project.status.value}"
+        )
+    
+    try:
+        preview = publish_service.get_publish_preview(project_id)
+        return preview
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar preview: {str(e)}")
+
+
+@router.get("/publish/db-status", response_model=publish_schemas.ProductionDBStatus)
+def get_production_db_status(
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Verifica o status da conexão com o banco de produção.
+    Apenas admins podem acessar este endpoint.
+    """
+    if current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem verificar status do banco de produção")
+    
+    try:
+        status = test_production_connection()
+        return publish_schemas.ProductionDBStatus(**status)
+    except Exception as e:
+        return publish_schemas.ProductionDBStatus(
+            status='error',
+            host='unknown',
+            database='unknown',
+            ready=False,
+            error=str(e)
+        )
+
+
+@router.get("/publish/available-fields", response_model=publish_schemas.AvailableFieldsResponse)
+def get_available_fields(
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Retorna lista de campos disponíveis para configuração na publicação.
+    Apenas admins podem acessar este endpoint.
+    """
+    if current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem acessar configuração de campos")
+    
+    return publish_schemas.AvailableFieldsResponse()
+
+
+@router.post("/{project_id}/publish", response_model=publish_schemas.PublishResponse)
+def execute_publish(
+    project_id: str,
+    request: publish_schemas.PublishRequest,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Executa a publicação dos dados validados para o banco de produção.
+    
+    Este endpoint:
+    1. Valida permissões (apenas admin)
+    2. Verifica status do projeto (deve ser PENDING_REVIEW)
+    3. Executa o pipeline de publicação com rollback em caso de erro
+    4. Atualiza status do projeto para DONE
+    5. Remove o arquivo DuckDB
+    
+    Apenas admins podem acessar este endpoint.
+    """
+    # Verificar se é admin
+    if current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem publicar dados")
+    
+    # Verificar se projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar se está em status PENDING_REVIEW
+    if project.status != models.ProjectStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Projeto deve estar em status PENDING_REVIEW para publicação. Status atual: {project.status.value}"
+        )
+    
+    try:
+        # Usar autor como o usuário atual (admin que está publicando)
+        # Para current_owner_id, usar o ID fornecido ou None
+        author_id = request.author_id or current_user.id
+        current_owner_id = request.current_owner_id
+        
+        # Executar publicação
+        result = publish_service.execute_publish(
+            project_id=project_id,
+            config=request.configuration,
+            author_id=author_id,
+            current_owner_id=current_owner_id
+        )
+        
+        if result.success:
+            # Atualizar status do projeto para DONE
+            project.status = models.ProjectStatus.DONE
+            db.commit()
+            
+            # Remover arquivo DuckDB
+            duckdb_deleted = publish_service.cleanup_project_files(project_id)
+            
+            return publish_schemas.PublishResponse(
+                result=result,
+                project_status=models.ProjectStatus.DONE.value,
+                duckdb_deleted=duckdb_deleted
+            )
+        else:
+            # Publicação falhou - não altera status
+            return publish_schemas.PublishResponse(
+                result=result,
+                project_status=project.status.value,
+                duckdb_deleted=False
+            )
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao executar publicação: {str(e)}")

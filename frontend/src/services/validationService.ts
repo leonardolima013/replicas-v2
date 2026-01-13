@@ -813,3 +813,214 @@ export const getQualityReport = async (
     );
   }
 };
+
+// ==================== PUBLICAÇÃO PARA PRODUÇÃO ====================
+
+// Interface para brand a ser criada
+export interface BrandToCreate {
+  brand_name: string;
+  occurrences: number;
+}
+
+// Interface para preview de similaridades
+export interface SimilarityPreview {
+  total_rows_with_similarity: number;
+  unique_similarity_groups: number;
+}
+
+// Interface para preview de publicação
+export interface PublishPreviewResponse {
+  project_id: string;
+  total_rows: number;
+  parts_new: number;
+  parts_existing: number;
+  brands_existing: number;
+  brands_to_create: number;
+  brands_to_create_list: BrandToCreate[];
+  available_fields: string[];
+  similarity: SimilarityPreview | null;
+  production_db_status: string;
+  warnings: string[];
+  blockers: string[];
+  can_publish: boolean;
+}
+
+// Interface para configuração de publicação
+export interface PublishConfiguration {
+  force_override: string[];
+  concatenate: string[];
+  update_if_empty: string[];
+}
+
+// Interface para request de publicação
+export interface PublishRequest {
+  configuration: PublishConfiguration;
+  author_id?: number;
+  current_owner_id?: number;
+}
+
+// Interface para resultado da publicação
+export interface PublishResult {
+  success: boolean;
+  project_id: string;
+  total_rows_processed: number;
+  invalid_records_skipped: number;
+  manufacturers_created: number;
+  brands_created: number;
+  parts_inserted: number;
+  parts_updated: number;
+  parts_skipped: number;
+  fields_updated: number;
+  activities_created: number;
+  similarity_groups_created: number;
+  similarity_groups_merged: number;
+  similarity_parts_updated: number;
+  execution_time_seconds: number;
+  message: string;
+  warnings: string[];
+  errors: string[];
+}
+
+// Interface para resposta de publicação
+export interface PublishResponse {
+  result: PublishResult;
+  project_status: string;
+  duckdb_deleted: boolean;
+}
+
+// Interface para status do banco de produção
+export interface ProductionDBStatus {
+  status: string;
+  host: string;
+  database: string;
+  postgres_version?: string;
+  existing_tables: string[];
+  missing_tables: string[];
+  ready: boolean;
+  error?: string;
+}
+
+// Interface para campos disponíveis
+export interface AvailableFieldsResponse {
+  system_fields: string[];
+  available_fields: string[];
+  field_descriptions: Record<string, string>;
+}
+
+/**
+ * Obtém preview da publicação
+ * @param projectId - ID do projeto
+ */
+export const getPublishPreview = async (
+  projectId: string
+): Promise<PublishPreviewResponse> => {
+  try {
+    const response = await api.get<PublishPreviewResponse>(
+      `/validation/${projectId}/publish/preview`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Apenas administradores podem publicar dados.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail ||
+          "Projeto deve estar em status PENDING_REVIEW para publicação."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao gerar preview de publicação."
+    );
+  }
+};
+
+/**
+ * Obtém status do banco de produção
+ */
+export const getProductionDBStatus = async (): Promise<ProductionDBStatus> => {
+  try {
+    const response = await api.get<ProductionDBStatus>(
+      `/validation/publish/db-status`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error(
+        "Apenas administradores podem verificar status do banco."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao verificar status do banco."
+    );
+  }
+};
+
+/**
+ * Obtém campos disponíveis para configuração
+ */
+export const getAvailableFields =
+  async (): Promise<AvailableFieldsResponse> => {
+    try {
+      const response = await api.get<AvailableFieldsResponse>(
+        `/validation/publish/available-fields`
+      );
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw new Error("Não autenticado. Faça login novamente.");
+      }
+      if (error.response?.status === 403) {
+        throw new Error("Apenas administradores podem acessar configuração.");
+      }
+      throw new Error(
+        error.response?.data?.detail || "Erro ao buscar campos disponíveis."
+      );
+    }
+  };
+
+/**
+ * Executa publicação dos dados para produção
+ * @param projectId - ID do projeto
+ * @param request - Configuração de publicação
+ */
+export const executePublish = async (
+  projectId: string,
+  request: PublishRequest
+): Promise<PublishResponse> => {
+  try {
+    const response = await api.post<PublishResponse>(
+      `/validation/${projectId}/publish`,
+      request
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Apenas administradores podem publicar dados.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail ||
+          "Projeto deve estar em status PENDING_REVIEW para publicação."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao executar publicação."
+    );
+  }
+};
