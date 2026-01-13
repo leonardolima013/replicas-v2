@@ -7,8 +7,11 @@ import {
   CheckCircle,
   XCircle,
   Download,
+  FileText,
+  BarChart3,
 } from "lucide-react";
 import * as validationService from "../../services/validationService";
+import QualityReportTab from "./components/QualityReportTab";
 
 export default function AdminValidationReview() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -22,6 +25,7 @@ export default function AdminValidationReview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<"preview" | "quality">("preview");
 
   const pageSize = 50;
 
@@ -232,8 +236,45 @@ export default function AdminValidationReview() {
       {/* Preview Content */}
       {!loading && !error && project && previewData && (
         <>
-          {/* Info Card */}
-          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mb-6">
+          {/* Tabs Navigation */}
+          <div className="bg-white dark:bg-gray-900 rounded-t-card shadow-soft border border-gray-100 dark:border-gray-800 border-b-0">
+            <div className="flex border-b border-gray-200 dark:border-gray-800">
+              <button
+                onClick={() => setActiveTab("preview")}
+                className={`
+                  flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all
+                  border-b-2 ${
+                    activeTab === "preview"
+                      ? "border-sky-600 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }
+                `}
+              >
+                <FileText className="w-5 h-5" />
+                Visualização dos Dados
+              </button>
+              <button
+                onClick={() => setActiveTab("quality")}
+                className={`
+                  flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all
+                  border-b-2 ${
+                    activeTab === "quality"
+                      ? "border-sky-600 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20"
+                      : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                  }
+                `}
+              >
+                <BarChart3 className="w-5 h-5" />
+                Relatório de Qualidade
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Content: Preview */}
+          {activeTab === "preview" && (
+            <>
+              {/* Info Card */}
+              <div className="bg-white dark:bg-gray-900 shadow-soft border border-gray-100 dark:border-gray-800 border-t-0 p-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
@@ -341,9 +382,9 @@ export default function AdminValidationReview() {
             )}
           </div>
 
-          {/* Action Buttons */}
-          <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mt-6">
-            <div className="flex items-center justify-between gap-4">
+            {/* Action Buttons */}
+            <div className="bg-white dark:bg-gray-900 rounded-b-card shadow-soft border border-gray-100 dark:border-gray-800 border-t p-6 mt-6">
+              <div className="flex items-center justify-between gap-4">
               <button
                 onClick={handleDownloadCSV}
                 className="btn-secondary flex items-center gap-2"
@@ -381,6 +422,58 @@ export default function AdminValidationReview() {
               </div>
             </div>
           </div>
+          </>
+          )}
+
+          {/* Tab Content: Quality Report */}
+          {activeTab === "quality" && projectId && (
+            <>
+              <div className="bg-white dark:bg-gray-900 rounded-card shadow-soft border border-gray-100 dark:border-gray-800 border-t-0">
+                <QualityReportTab projectId={projectId} />
+              </div>
+              
+              {/* Action Buttons também na aba de qualidade */}
+              <div className="bg-white dark:bg-gray-900 rounded-b-card shadow-soft border border-gray-100 dark:border-gray-800 p-6 mt-6">
+                <div className="flex items-center justify-between gap-4">
+                  <button
+                    onClick={handleDownloadCSV}
+                    className="btn-secondary flex items-center gap-2"
+                  >
+                    <Download className="w-5 h-5" />
+                    Baixar CSV
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleReject}
+                      disabled={actionLoading}
+                      className="btn-secondary bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <XCircle className="w-5 h-5" />
+                      )}
+                      Rejeitar
+                    </button>
+
+                    <button
+                      onClick={handleApprove}
+                      disabled={actionLoading}
+                      className="btn-primary bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {actionLoading ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <CheckCircle className="w-5 h-5" />
+                      )}
+                      Aprovar e Publicar no S3
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

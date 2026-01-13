@@ -113,3 +113,53 @@ class BrandAnalysisResponse(BaseModel):
 class BrandApplicationResponse(BaseModel):
     message: str                    # Mensagem de sucesso
     rows_affected: int              # Número de linhas afetadas pelo UPDATE
+
+# --- SCHEMAS PARA RELATÓRIO DE QUALIDADE (ADMIN) ---
+
+class StructuralQuality(BaseModel):
+    required_columns_present: int
+    required_columns_total: int
+    extra_columns_mapped: int
+    missing_columns: int
+
+class DataQualityMetrics(BaseModel):
+    completeness_pct: float
+    total_rows: int
+    uppercase_issues: int
+    null_string_issues: int
+    null_numeric_issues: int
+    brand_issues: int
+    ncm_issues: int
+    barcode_issues: int
+    weight_issues: int
+    dimension_issues: int
+    search_ref_issues: int
+    manufacturer_ref_issues: int
+
+class BrandQualityMetrics(BaseModel):
+    total_rows: int
+    normalized_count: int
+    normalized_pct: float
+    unknown_count: int
+    unknown_pct: float
+    top_unknown_brands: List[UnknownBrand]
+
+class DuplicatesQuality(BaseModel):
+    found: int
+    removed: int
+
+class StatisticsQuality(BaseModel):
+    weight_correlation: Optional[float]
+    physical_violations: int
+    negative_values: int
+
+class QualityReportResponse(BaseModel):
+    project_id: str
+    overall_quality_score: float  # 0-100
+    structural: StructuralQuality
+    data_quality: DataQualityMetrics
+    brands: BrandQualityMetrics
+    duplicates: DuplicatesQuality
+    statistics: StatisticsQuality
+    warnings: List[str]
+    blockers: List[str]

@@ -141,6 +141,61 @@ export interface BrandApplicationResponse {
   rows_affected: number;
 }
 
+// Interfaces para Relatório de Qualidade
+export interface StructuralQuality {
+  required_columns_present: number;
+  required_columns_total: number;
+  extra_columns_mapped: number;
+  missing_columns: number;
+}
+
+export interface DataQualityMetrics {
+  completeness_pct: number;
+  total_rows: number;
+  uppercase_issues: number;
+  null_string_issues: number;
+  null_numeric_issues: number;
+  brand_issues: number;
+  ncm_issues: number;
+  barcode_issues: number;
+  weight_issues: number;
+  dimension_issues: number;
+  search_ref_issues: number;
+  manufacturer_ref_issues: number;
+}
+
+export interface BrandQualityMetrics {
+  total_rows: number;
+  normalized_count: number;
+  normalized_pct: number;
+  unknown_count: number;
+  unknown_pct: number;
+  top_unknown_brands: UnknownBrand[];
+}
+
+export interface DuplicatesQuality {
+  found: number;
+  removed: number;
+}
+
+export interface StatisticsQuality {
+  weight_correlation: number | null;
+  physical_violations: number;
+  negative_values: number;
+}
+
+export interface QualityReportResponse {
+  project_id: string;
+  overall_quality_score: number;
+  structural: StructuralQuality;
+  data_quality: DataQualityMetrics;
+  brands: BrandQualityMetrics;
+  duplicates: DuplicatesQuality;
+  statistics: StatisticsQuality;
+  warnings: string[];
+  blockers: string[];
+}
+
 // ==================== FUNÇÕES DE API ====================
 
 /**
@@ -727,6 +782,34 @@ export const applyBrandNormalization = async (
     }
     throw new Error(
       error.response?.data?.detail || "Erro ao aplicar normalização de marcas."
+    );
+  }
+};
+
+/**
+ * Obtém relatório consolidado de qualidade do projeto
+ * @param projectId - ID do projeto
+ */
+export const getQualityReport = async (
+  projectId: string
+): Promise<QualityReportResponse> => {
+  try {
+    const response = await api.get<QualityReportResponse>(
+      `/validation/${projectId}/quality-report`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão de acesso a este projeto.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao gerar relatório de qualidade."
     );
   }
 };

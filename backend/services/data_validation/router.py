@@ -824,3 +824,203 @@ def apply_brand_normalization(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao aplicar normalização de marcas: {str(e)}")
+
+# --- ROTA: RELATÓRIO DE QUALIDADE (ADMIN) ---
+@router.get("/{project_id}/quality-report", response_model=schemas.QualityReportResponse)
+def get_quality_report(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Gera relatório consolidado de qualidade para revisão do admin.
+    
+    Agrega métricas de todas as etapas de validação e calcula um score geral.
+    Usado na aba de Relatório de Qualidade da interface do admin.
+    """
+    # Verificar se o projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Apenas admin pode acessar o relatório (ou owner)
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        
+        # 1. Analisar estrutura das colunas (replicar lógica do endpoint columns/analysis)
+        db_columns = duck.get_columns()
+        found = set(db_columns)
+        required = constants.REQUIRED_COLUMNS
+        optional = constants.OPTIONAL_COLUMNS
+        all_valid = required | optional
+        
+        missing = list(required - found)
+        extra = list(found - all_valid)
+        present = list(found & all_valid)
+        
+        structural = schemas.StructuralQuality(
+            required_columns_present=len([col for col in present if col in constants.REQUIRED_COLUMNS]),
+            required_columns_total=len(constants.REQUIRED_COLUMNS),
+            extra_columns_mapped=len(extra),
+            missing_columns=len(missing)
+        )
+        
+        # 2. Diagnosticar problemas de qualidade de dados (replicar lógica do endpoint treatments/diagnosis)
+        uppercase_issues = duck.diagnose_uppercase_issues(constants.STRING_CHECK_COLUMNS)
+        null_string_issues = duck.diagnose_null_strings(constants.STRING_CHECK_COLUMNS)
+        null_numeric_issues = duck.diagnose_null_numerics(constants.NUMERIC_CHECK_COLUMNS)
+        
+        brand_issues = duck.diagnose_brand_issues()
+        ncm_issues = duck.diagnose_ncm_issues()
+        barcode_issues = duck.diagnose_barcode_issues()
+        weight_issues = duck.diagnose_weight_issues()
+        dimension_issues = duck.diagnose_dimension_issues()
+        search_ref_issues = duck.diagnose_search_ref_issues()
+        manufacturer_ref_issues = duck.diagnose_manufacturer_ref_issues()
+        
+        # Contar total de linhas
+        conn = duck._get_conn(read_only=True)
+        try:
+            total_rows = conn.execute("SELECT COUNT(*) FROM raw_data").fetchone()[0]
+            
+            # Calcular completude (baseado em colunas com nulls)
+            if len(constants.STRING_CHECK_COLUMNS) > 0:
+                valid_cols = [col for col in list(constants.STRING_CHECK_COLUMNS)[:5] if col in db_columns]
+                if valid_cols:
+                    null_query = "SELECT " + ", ".join([
+                        f"COUNT(*) - COUNT(\"{col}\") as {col}_nulls"
+                        for col in valid_cols
+                    ]) + " FROM raw_data"
+                    null_result = conn.execute(null_query).fetchone()
+                    max_nulls = max(null_result) if null_result else 0
+                else:
+                    max_nulls = 0
+            else:
+                max_nulls = 0
+        finally:
+            conn.close()
+        
+        completeness_pct = 100.0 if total_rows == 0 else ((total_rows - max_nulls) / total_rows) * 100
+        
+        data_quality = schemas.DataQualityMetrics(
+            completeness_pct=round(completeness_pct, 2),
+            total_rows=total_rows,
+            uppercase_issues=len(uppercase_issues),
+            null_string_issues=len(null_string_issues),
+            null_numeric_issues=len(null_numeric_issues),
+            brand_issues=brand_issues,
+            ncm_issues=ncm_issues,
+            barcode_issues=barcode_issues,
+            weight_issues=weight_issues,
+            dimension_issues=dimension_issues,
+            search_ref_issues=search_ref_issues,
+            manufacturer_ref_issues=manufacturer_ref_issues
+        )
+        
+        # 3. Analisar marcas
+        brand_analysis = duck.analyze_brands()
+        brands = schemas.BrandQualityMetrics(
+            total_rows=brand_analysis["total_rows"],
+            normalized_count=brand_analysis["mapped_count"],
+            normalized_pct=round((brand_analysis["mapped_count"] / brand_analysis["total_rows"] * 100) if brand_analysis["total_rows"] > 0 else 0, 2),
+            unknown_count=brand_analysis["unknown_count"],
+            unknown_pct=round((brand_analysis["unknown_count"] / brand_analysis["total_rows"] * 100) if brand_analysis["total_rows"] > 0 else 0, 2),
+            top_unknown_brands=[
+                schemas.UnknownBrand(**brand)
+                for brand in brand_analysis["unknown_brands"][:5]  # Top 5
+            ]
+        )
+        
+        # 4. Diagnosticar duplicatas (current state)
+        try:
+            dup_diagnosis = duck.diagnose_duplicates(page=1, limit=1)  # Apenas contar
+            duplicates = schemas.DuplicatesQuality(
+                found=dup_diagnosis["total_duplicates"],
+                removed=0  # Assumindo que ainda não foram removidas ou já foram
+            )
+        except:
+            duplicates = schemas.DuplicatesQuality(found=0, removed=0)
+        
+        # 5. Estatísticas e violações
+        stats = duck.get_statistics()
+        statistics = schemas.StatisticsQuality(
+            weight_correlation=stats["correlation"],
+            physical_violations=stats["violations"]["count_weight_error"],
+            negative_values=stats["violations"]["count_negative"]
+        )
+        
+        # 6. Calcular score geral (0-100)
+        # - Estrutura: 25 pontos (colunas obrigatórias presentes)
+        # - Completude: 25 pontos (% de dados preenchidos)
+        # - Marcas: 20 pontos (% de marcas reconhecidas)
+        # - Qualidade: 20 pontos (baseado em issues)
+        # - Estatísticas: 10 pontos (violações e correlação)
+        
+        structure_score = (structural.required_columns_present / structural.required_columns_total) * 25 if structural.required_columns_total > 0 else 0
+        completeness_score = (completeness_pct / 100) * 25
+        brands_score = (brands.normalized_pct / 100) * 20
+        
+        # Qualidade: quanto menos issues, melhor
+        total_issues = (
+            data_quality.uppercase_issues +
+            data_quality.null_string_issues +
+            data_quality.null_numeric_issues +
+            data_quality.brand_issues +
+            data_quality.ncm_issues +
+            data_quality.barcode_issues +
+            data_quality.weight_issues +
+            data_quality.dimension_issues +
+            data_quality.search_ref_issues +
+            data_quality.manufacturer_ref_issues
+        )
+        issue_ratio = total_issues / total_rows if total_rows > 0 else 0
+        quality_score = max(0, 20 - (issue_ratio * 100))  # Penaliza proporcional aos issues
+        
+        # Estatísticas: penaliza violações
+        violations_ratio = (statistics.physical_violations + statistics.negative_values) / total_rows if total_rows > 0 else 0
+        stats_score = max(0, 10 - (violations_ratio * 100))
+        
+        overall_score = round(structure_score + completeness_score + brands_score + quality_score + stats_score, 2)
+        
+        # 7. Gerar warnings e blockers
+        warnings = []
+        blockers = []
+        
+        if structural.missing_columns > 0:
+            blockers.append(f"{structural.missing_columns} colunas obrigatórias faltando")
+        
+        if brands.unknown_pct > 10:
+            warnings.append(f"{brands.unknown_pct}% de marcas desconhecidas ({brands.unknown_count} linhas)")
+        
+        if statistics.physical_violations > 0:
+            warnings.append(f"{statistics.physical_violations} violações físicas detectadas (peso líquido > bruto)")
+        
+        if statistics.negative_values > 0:
+            warnings.append(f"{statistics.negative_values} valores negativos em campos numéricos")
+        
+        if duplicates.found > 0:
+            warnings.append(f"{duplicates.found} linhas duplicadas encontradas")
+        
+        if completeness_pct < 90:
+            warnings.append(f"Completude dos dados: {completeness_pct}% (recomendado > 90%)")
+        
+        if total_issues > (total_rows * 0.1):  # Mais de 10% com issues
+            warnings.append(f"{total_issues} problemas de qualidade encontrados ({round(issue_ratio * 100, 2)}% dos dados)")
+        
+        return schemas.QualityReportResponse(
+            project_id=project_id,
+            overall_quality_score=overall_score,
+            structural=structural,
+            data_quality=data_quality,
+            brands=brands,
+            duplicates=duplicates,
+            statistics=statistics,
+            warnings=warnings,
+            blockers=blockers
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar relatório de qualidade: {str(e)}")
