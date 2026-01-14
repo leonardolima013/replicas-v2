@@ -27,19 +27,18 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: replicas-v2_app
+    network_mode: "host"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend:/app/backend
-    ports:
-      - "8000:8000"
     environment:
-      # Banco de metadados local (validação)
-      DB_HOST: db_metadados
-      DB_PORT: "5432"
+      # Banco de metadados local (validação) - usando porta mapeada pois estamos em host mode
+      DB_HOST: localhost
+      DB_PORT: "5434"
       POSTGRES_USER: pgroot
       POSTGRES_PASSWORD: pg@root
       POSTGRES_DB: replicas_metadados_db
-      # Banco de produção (publicação) - configurar conforme ambiente
+      # Banco de produção (publicação) - agora pode usar localhost diretamente
       PROD_DB_HOST: ${PROD_DB_HOST:-localhost}
       PROD_DB_PORT: ${PROD_DB_PORT:-5432}
       PROD_DB_NAME: ${PROD_DB_NAME:-hubbi_prod}

@@ -195,7 +195,3 @@ npm run dev
 - ✅ Tokens com expiração configurável
 - ✅ CORS configurado
 - ✅ Validação de entrada com Pydantic
-
-## 📄 Licença
-
-MIT License - 2025 Replicas-v2

@@ -701,11 +701,12 @@ class PublishPipeline:
         try:
             # Carregar dados do DuckDB
             duck = duck_manager.DuckSession(project_id)
+            duck_conn = duck._get_conn(read_only=True)
             
             # FASE 1: Buscar todos os dados
             logger.info("FASE 1: Carregando dados do DuckDB")
-            all_data = duck.conn.execute("SELECT * FROM raw_data").fetchall()
-            columns = [desc[0] for desc in duck.conn.execute("SELECT * FROM raw_data LIMIT 0").description]
+            all_data = duck_conn.execute("SELECT * FROM raw_data").fetchall()
+            columns = [desc[0] for desc in duck_conn.execute("SELECT * FROM raw_data LIMIT 0").description]
             
             # Converter para lista de dicts
             data_list = [dict(zip(columns, row)) for row in all_data]
@@ -891,12 +892,17 @@ class PublishPipeline:
             self.conn.commit()
             logger.info("Transação commitada com sucesso!")
             
+            # Fechar conexão DuckDB
+            duck_conn.close()
+            
             report.execution_time = time.time() - start_time
             return report
             
         except Exception as e:
             logger.error(f"Erro no pipeline de publicação: {e}")
             self.conn.rollback()
+            if 'duck_conn' in locals():
+                duck_conn.close()
             report.errors.append(str(e))
             report.execution_time = time.time() - start_time
             raise
@@ -1051,16 +1057,28 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
     Returns:
         PublishPreviewResponse com métricas e validações
     """
+    import time
+    start_total = time.time()
+    
     warnings = []
     blockers = []
+    duck_conn = None
+    
+    logger.info(f"📊 [PREVIEW] Iniciando preview para projeto: {project_id}")
     
     try:
-        # Testar conexão com produção
+        # ETAPA 1: Testar conexão com produção
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] ETAPA 1: Testando conexão com banco de produção...")
+        
         from backend.services.data_validation.production_db import test_production_connection
         db_status = test_production_connection()
         
+        logger.info(f"📊 [PREVIEW] ETAPA 1 concluída em {time.time() - step_start:.2f}s - Status: {db_status['status']}")
+        
         if db_status['status'] != 'connected':
             blockers.append(f"Não foi possível conectar ao banco de produção: {db_status.get('error', 'Erro desconhecido')}")
+            logger.warning(f"📊 [PREVIEW] Conexão falhou: {db_status.get('error')}")
             
             return PublishPreviewResponse(
                 project_id=project_id,
@@ -1079,25 +1097,45 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
         if not db_status['ready']:
             blockers.append(f"Tabelas faltando no banco de produção: {', '.join(db_status['missing_tables'])}")
         
-        # Carregar dados do DuckDB
+        # ETAPA 2: Carregar dados do DuckDB
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] ETAPA 2: Conectando ao DuckDB...")
+        
         duck = duck_manager.DuckSession(project_id)
+        duck_conn = duck._get_conn(read_only=True)
         
-        # Total de linhas
-        total_rows = duck.conn.execute("SELECT COUNT(*) FROM raw_data").fetchone()[0]
+        logger.info(f"📊 [PREVIEW] ETAPA 2 concluída em {time.time() - step_start:.2f}s")
         
-        # Buscar dados de brands
+        # ETAPA 3: Contar total de linhas
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] ETAPA 3: Contando total de linhas...")
+        
+        total_rows = duck_conn.execute("SELECT COUNT(*) FROM raw_data").fetchone()[0]
+        
+        logger.info(f"📊 [PREVIEW] ETAPA 3 concluída em {time.time() - step_start:.2f}s - Total: {total_rows} linhas")
+        
+        # ETAPA 4: Buscar dados de brands
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] ETAPA 4: Buscando brands no dataset...")
+        
         brands_query = """
             SELECT UPPER(TRIM(brand)) as brand_name, COUNT(*) as cnt
             FROM raw_data
             WHERE brand IS NOT NULL AND TRIM(brand) != '' AND UPPER(TRIM(brand)) != 'NAN'
             GROUP BY UPPER(TRIM(brand))
         """
-        brands_in_data = duck.conn.execute(brands_query).fetchall()
+        brands_in_data = duck_conn.execute(brands_query).fetchall()
         brands_dict = {row[0]: row[1] for row in brands_in_data}
         
-        # Verificar brands existentes na produção
+        logger.info(f"📊 [PREVIEW] ETAPA 4 concluída em {time.time() - step_start:.2f}s - {len(brands_dict)} brands encontradas")
+        
+        # ETAPA 5: Verificar brands existentes na produção
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] ETAPA 5: Verificando brands no banco de produção...")
+        
         with production_connection() as conn:
             existing_brands = get_all_brands(conn)
+            logger.info(f"📊 [PREVIEW] ETAPA 5a: {len(existing_brands)} brands existentes no banco")
             
             brands_existing = 0
             brands_to_create_list = []
@@ -1108,16 +1146,26 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
                 else:
                     brands_to_create_list.append(BrandToCreate(brand_name=brand_name, occurrences=count))
             
-            # Verificar peças existentes (amostragem para performance)
+            logger.info(f"📊 [PREVIEW] ETAPA 5 concluída em {time.time() - step_start:.2f}s - {brands_existing} existentes, {len(brands_to_create_list)} novas")
+            
+            # ETAPA 6: Verificar peças existentes
+            step_start = time.time()
+            logger.info("📊 [PREVIEW] ETAPA 6: Buscando peças no dataset...")
+            
             parts_query = """
                 SELECT UPPER(TRIM(search_ref)) as ref, UPPER(TRIM(brand)) as brand
                 FROM raw_data
                 WHERE search_ref IS NOT NULL AND brand IS NOT NULL
                 AND TRIM(search_ref) != '' AND TRIM(brand) != ''
             """
-            parts_in_data = duck.conn.execute(parts_query).fetchall()
+            parts_in_data = duck_conn.execute(parts_query).fetchall()
             
-            # Contar existentes vs novos
+            logger.info(f"📊 [PREVIEW] ETAPA 6 concluída em {time.time() - step_start:.2f}s - {len(parts_in_data)} peças encontradas")
+            
+            # ETAPA 7: Contar peças existentes vs novas
+            step_start = time.time()
+            logger.info("📊 [PREVIEW] ETAPA 7: Verificando peças existentes no banco de produção...")
+            
             cursor = conn.cursor()
             existing_count = 0
             batch_size = 1000
@@ -1128,9 +1176,19 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
                     brand_id = existing_brands[brand][0]
                     parts_to_check.append((ref, brand_id))
             
+            logger.info(f"📊 [PREVIEW] ETAPA 7a: {len(parts_to_check)} peças para verificar no banco")
+            
             if parts_to_check:
+                total_batches = (len(parts_to_check) + batch_size - 1) // batch_size
+                logger.info(f"📊 [PREVIEW] ETAPA 7b: Processando em {total_batches} batches de {batch_size}...")
+                
                 for i in range(0, len(parts_to_check), batch_size):
                     batch = parts_to_check[i:i + batch_size]
+                    batch_num = (i // batch_size) + 1
+                    
+                    if batch_num % 10 == 0 or batch_num == 1:
+                        logger.info(f"📊 [PREVIEW] ETAPA 7b: Processando batch {batch_num}/{total_batches}...")
+                    
                     cursor.execute("""
                         SELECT COUNT(*) FROM catalog_part
                         WHERE (manufacturer_ref, brand_id) IN %s
@@ -1138,16 +1196,21 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
                     existing_count += cursor.fetchone()[0]
             
             cursor.close()
+            
+            logger.info(f"📊 [PREVIEW] ETAPA 7 concluída em {time.time() - step_start:.2f}s - {existing_count} peças existentes")
         
         parts_new = total_rows - existing_count
         parts_existing = existing_count
         
-        # Verificar coluna similarity
-        columns = [col[0] for col in duck.conn.execute("DESCRIBE raw_data").fetchall()]
+        # ETAPA 8: Verificar coluna similarity
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] ETAPA 8: Verificando dados de similaridade...")
+        
+        columns = [col[0] for col in duck_conn.execute("DESCRIBE raw_data").fetchall()]
         similarity_preview = None
         
         if 'similarity' in columns:
-            sim_count = duck.conn.execute("""
+            sim_count = duck_conn.execute("""
                 SELECT COUNT(*) FROM raw_data 
                 WHERE similarity IS NOT NULL AND TRIM(CAST(similarity AS VARCHAR)) != ''
             """).fetchone()[0]
@@ -1155,10 +1218,13 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
             if sim_count > 0:
                 similarity_preview = SimilarityPreview(
                     total_rows_with_similarity=sim_count,
-                    unique_similarity_groups=0  # Seria necessário parsear JSONs para contar
+                    unique_similarity_groups=0
                 )
+                logger.info(f"📊 [PREVIEW] ETAPA 8: {sim_count} linhas com similaridade")
         
-        # Validações
+        logger.info(f"📊 [PREVIEW] ETAPA 8 concluída em {time.time() - step_start:.2f}s")
+        
+        # Validações finais
         if total_rows == 0:
             blockers.append("O projeto não contém dados para publicar")
         
@@ -1166,6 +1232,9 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
             warnings.append(f"{len(brands_to_create_list)} brand(s) serão criadas automaticamente")
         
         can_publish = len(blockers) == 0
+        
+        total_time = time.time() - start_total
+        logger.info(f"📊 [PREVIEW] ✅ Preview concluído em {total_time:.2f}s - Pode publicar: {can_publish}")
         
         return PublishPreviewResponse(
             project_id=project_id,
@@ -1181,9 +1250,13 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
             blockers=blockers,
             can_publish=can_publish
         )
-        
+    
     except Exception as e:
-        logger.error(f"Erro ao gerar preview: {e}")
+        total_time = time.time() - start_total
+        logger.error(f"📊 [PREVIEW] ❌ Erro após {total_time:.2f}s: {e}")
+        import traceback
+        logger.error(f"📊 [PREVIEW] Traceback: {traceback.format_exc()}")
+        
         blockers.append(f"Erro ao analisar dados: {str(e)}")
         
         return PublishPreviewResponse(
@@ -1199,6 +1272,11 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
             blockers=blockers,
             can_publish=False
         )
+    
+    finally:
+        if duck_conn:
+            duck_conn.close()
+            logger.info("📊 [PREVIEW] Conexão DuckDB fechada")
 
 
 def execute_publish(

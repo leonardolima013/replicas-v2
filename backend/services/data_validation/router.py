@@ -1033,38 +1033,8 @@ def get_quality_report(
 from backend.services.data_validation import publish_schemas, publish_service
 from backend.services.data_validation.production_db import test_production_connection
 
-@router.get("/{project_id}/publish/preview", response_model=publish_schemas.PublishPreviewResponse)
-def get_publish_preview(
-    project_id: str,
-    db: Session = Depends(database.get_db),
-    current_user: core_models.User = Depends(deps.get_current_user)
-):
-    """
-    Preview da publicação: mostra o que será criado/atualizado no banco de produção.
-    Apenas admins podem acessar este endpoint.
-    """
-    # Verificar se é admin
-    if current_user.role != "adm":
-        raise HTTPException(status_code=403, detail="Apenas administradores podem publicar dados")
-    
-    # Verificar se projeto existe
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Projeto não encontrado")
-    
-    # Verificar se está em status PENDING_REVIEW
-    if project.status != models.ProjectStatus.PENDING_REVIEW:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Projeto deve estar em status PENDING_REVIEW para publicação. Status atual: {project.status.value}"
-        )
-    
-    try:
-        preview = publish_service.get_publish_preview(project_id)
-        return preview
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar preview: {str(e)}")
-
+# IMPORTANTE: Endpoints estáticos devem vir ANTES dos endpoints com {project_id}
+# para evitar que o FastAPI interprete "publish" como um project_id
 
 @router.get("/publish/db-status", response_model=publish_schemas.ProductionDBStatus)
 def get_production_db_status(
@@ -1074,13 +1044,17 @@ def get_production_db_status(
     Verifica o status da conexão com o banco de produção.
     Apenas admins podem acessar este endpoint.
     """
+    print(f"🔌 [DB-STATUS] Verificando status do banco de produção...", flush=True)
+    
     if current_user.role != "adm":
         raise HTTPException(status_code=403, detail="Apenas administradores podem verificar status do banco de produção")
     
     try:
         status = test_production_connection()
+        print(f"🔌 [DB-STATUS] Status: {status}", flush=True)
         return publish_schemas.ProductionDBStatus(**status)
     except Exception as e:
+        print(f"🔌 [DB-STATUS] Erro: {e}", flush=True)
         return publish_schemas.ProductionDBStatus(
             status='error',
             host='unknown',
@@ -1098,10 +1072,69 @@ def get_available_fields(
     Retorna lista de campos disponíveis para configuração na publicação.
     Apenas admins podem acessar este endpoint.
     """
+    print(f"📋 [AVAILABLE-FIELDS] Retornando campos disponíveis...", flush=True)
+    
     if current_user.role != "adm":
         raise HTTPException(status_code=403, detail="Apenas administradores podem acessar configuração de campos")
     
     return publish_schemas.AvailableFieldsResponse()
+
+
+@router.get("/{project_id}/publish/preview", response_model=publish_schemas.PublishPreviewResponse)
+def get_publish_preview(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Preview da publicação: mostra o que será criado/atualizado no banco de produção.
+    Apenas admins podem acessar este endpoint.
+    """
+    import logging
+    import sys
+    logger = logging.getLogger(__name__)
+    
+    # Print direto para stdout para garantir que aparece
+    print(f"🚀 [ENDPOINT] publish/preview chamado para projeto: {project_id}", flush=True)
+    sys.stdout.flush()
+    
+    logger.info(f"🚀 [ENDPOINT] publish/preview chamado para projeto: {project_id}")
+    logger.info(f"🚀 [ENDPOINT] Usuário: {current_user.usuario}, Role: {current_user.role}")
+    
+    # Verificar se é admin
+    if current_user.role != "adm":
+        logger.warning(f"🚀 [ENDPOINT] Acesso negado - usuário não é admin")
+        raise HTTPException(status_code=403, detail="Apenas administradores podem publicar dados")
+    
+    logger.info(f"🚀 [ENDPOINT] Buscando projeto no banco de metadados...")
+    
+    # Verificar se projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        logger.warning(f"🚀 [ENDPOINT] Projeto não encontrado: {project_id}")
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    logger.info(f"🚀 [ENDPOINT] Projeto encontrado. Status: {project.status}")
+    
+    # Verificar se está em status PENDING_REVIEW
+    if project.status != models.ProjectStatus.PENDING_REVIEW:
+        logger.warning(f"🚀 [ENDPOINT] Status inválido: {project.status.value}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Projeto deve estar em status PENDING_REVIEW para publicação. Status atual: {project.status.value}"
+        )
+    
+    logger.info(f"🚀 [ENDPOINT] Chamando publish_service.get_publish_preview()...")
+    
+    try:
+        preview = publish_service.get_publish_preview(project_id)
+        logger.info(f"🚀 [ENDPOINT] Preview gerado com sucesso!")
+        return preview
+    except Exception as e:
+        logger.error(f"🚀 [ENDPOINT] Erro ao gerar preview: {e}")
+        import traceback
+        logger.error(f"🚀 [ENDPOINT] Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar preview: {str(e)}")
 
 
 @router.post("/{project_id}/publish", response_model=publish_schemas.PublishResponse)
