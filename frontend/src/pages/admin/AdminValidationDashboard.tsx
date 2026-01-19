@@ -12,12 +12,15 @@ import {
   XCircle,
 } from "lucide-react";
 import * as validationService from "../../services/validationService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 export default function AdminValidationDashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<validationService.Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { modalState, closeModal, showError } = useModal();
 
   useEffect(() => {
     fetchPendingProjects();
@@ -34,7 +37,7 @@ export default function AdminValidationDashboard() {
           p.status === "PENDING_REVIEW" ||
           p.status === "PROCESSING_REPORT" ||
           p.status === "READY_TO_PUBLISH" ||
-          p.status === "PROCESSING_ERROR"
+          p.status === "PROCESSING_ERROR",
       );
       setProjects(actionableProjects);
     } catch (err: any) {
@@ -53,7 +56,7 @@ export default function AdminValidationDashboard() {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("access_token")}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -70,7 +73,7 @@ export default function AdminValidationDashboard() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      alert(err.message || "Erro ao baixar CSV");
+      showError(err.message || "Erro ao baixar CSV");
     }
   };
 
@@ -265,7 +268,7 @@ export default function AdminValidationDashboard() {
                           onClick={() =>
                             handleDownloadCSV(
                               project.id,
-                              project.original_filename
+                              project.original_filename,
                             )
                           }
                           className="btn-secondary text-sm inline-flex items-center gap-2"
@@ -291,6 +294,18 @@ export default function AdminValidationDashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

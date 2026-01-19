@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import * as replicasService from "../../services/replicasService";
 import { getCurrentUser } from "../../services/authService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 export default function ReplicasDashboard() {
   const [replica, setReplica] =
@@ -21,6 +23,8 @@ export default function ReplicasDashboard() {
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const currentUser = getCurrentUser();
+  const { modalState, closeModal, showConfirm, showSuccess, showError } =
+    useModal();
 
   // Buscar réplica ao carregar componente
   useEffect(() => {
@@ -79,23 +83,27 @@ export default function ReplicasDashboard() {
   const handleDeleteReplica = async () => {
     if (!currentUser?.usuario) return;
 
-    const confirmDelete = window.confirm(
-      `Tem certeza que deseja deletar sua réplica?\n\nContainer: ${replica?.name}\nDatabase: ${replica?.database_name}\n\nEsta ação não pode ser desfeita!`
+    showConfirm(
+      `Tem certeza que deseja deletar sua réplica?\n\nContainer: ${replica?.name}\nDatabase: ${replica?.database_name}\n\nEsta ação não pode ser desfeita!`,
+      async () => {
+        try {
+          setDeleting(true);
+          setError(null);
+          await replicasService.deleteUserReplica(currentUser.usuario);
+          setReplica(null); // Limpar estado
+          setDbPassword(""); // Limpar senha
+          showSuccess("Réplica deletada com sucesso!");
+        } catch (err: any) {
+          setError(err.message || "Erro ao deletar réplica. Tente novamente.");
+          showError(err.message || "Erro ao deletar réplica.");
+        } finally {
+          setDeleting(false);
+        }
+      },
+      "Deletar Réplica",
+      "Deletar",
+      "Cancelar",
     );
-
-    if (!confirmDelete) return;
-
-    try {
-      setDeleting(true);
-      setError(null);
-      await replicasService.deleteUserReplica(currentUser.usuario);
-      setReplica(null); // Limpar estado
-      setDbPassword(""); // Limpar senha
-    } catch (err: any) {
-      setError(err.message || "Erro ao deletar réplica. Tente novamente.");
-    } finally {
-      setDeleting(false);
-    }
   };
 
   // Estado de Loading inicial
@@ -407,6 +415,18 @@ export default function ReplicasDashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

@@ -2,12 +2,15 @@ import { Plus, ArrowRight, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import * as validationService from "../../services/validationService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 export default function DevDashboard() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<validationService.Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { modalState, closeModal, showConfirm, showError } = useModal();
 
   useEffect(() => {
     fetchProjects();
@@ -27,19 +30,21 @@ export default function DevDashboard() {
   };
 
   const handleDelete = async (projectId: string, fileName: string) => {
-    if (
-      !window.confirm(`Tem certeza que deseja excluir o projeto "${fileName}"?`)
-    ) {
-      return;
-    }
-
-    try {
-      await validationService.deleteProject(projectId);
-      // Remover projeto da lista localmente
-      setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    } catch (err: any) {
-      alert(err.message || "Erro ao excluir projeto");
-    }
+    showConfirm(
+      `Tem certeza que deseja excluir o projeto "${fileName}"?`,
+      async () => {
+        try {
+          await validationService.deleteProject(projectId);
+          // Remover projeto da lista localmente
+          setProjects((prev) => prev.filter((p) => p.id !== projectId));
+        } catch (err: any) {
+          showError(err.message || "Erro ao excluir projeto");
+        }
+      },
+      "Excluir Projeto",
+      "Excluir",
+      "Cancelar",
+    );
   };
 
   const getStatusBadge = (status: string) => {
@@ -241,6 +246,18 @@ export default function DevDashboard() {
           </div>
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

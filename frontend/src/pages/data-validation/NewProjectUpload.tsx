@@ -8,6 +8,8 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useState, type DragEvent, type ChangeEvent } from "react";
 import { uploadCSV } from "../../services/validationService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 export default function NewProjectUpload() {
   const navigate = useNavigate();
@@ -16,6 +18,7 @@ export default function NewProjectUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { modalState, closeModal, showWarning } = useModal();
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -41,7 +44,7 @@ export default function NewProjectUpload() {
           setProjectName(file.name.replace(".csv", ""));
         }
       } else {
-        alert("Por favor, selecione um arquivo CSV");
+        showWarning("Por favor, selecione um arquivo CSV");
       }
     }
   };
@@ -56,14 +59,16 @@ export default function NewProjectUpload() {
           setProjectName(file.name.replace(".csv", ""));
         }
       } else {
-        alert("Por favor, selecione um arquivo CSV");
+        showWarning("Por favor, selecione um arquivo CSV");
       }
     }
   };
 
   const handleStartTreatment = async () => {
     if (!projectName || !selectedFile) {
-      alert("Por favor, preencha o nome do projeto e selecione um arquivo");
+      showWarning(
+        "Por favor, preencha o nome do projeto e selecione um arquivo",
+      );
       return;
     }
 
@@ -78,7 +83,7 @@ export default function NewProjectUpload() {
     } catch (err: any) {
       console.error("Erro ao fazer upload:", err);
       setError(
-        err.message || "Erro ao fazer upload do arquivo. Tente novamente."
+        err.message || "Erro ao fazer upload do arquivo. Tente novamente.",
       );
     } finally {
       setIsUploading(false);
@@ -220,6 +225,18 @@ export default function NewProjectUpload() {
           </button>
         </div>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

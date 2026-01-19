@@ -12,6 +12,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import * as validationService from "../../../services/validationService";
+import Modal from "../../../components/Modal";
+import { useModal } from "../../../hooks/useModal";
 
 interface BrandMappingStepProps {
   readOnly?: boolean;
@@ -27,6 +29,7 @@ export default function BrandMappingStep({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { modalState, closeModal, showWarning, showConfirm } = useModal();
 
   useEffect(() => {
     if (projectId) {
@@ -53,37 +56,40 @@ export default function BrandMappingStep({
     if (!projectId || readOnly) return;
 
     if (!analysis || analysis.mapped_count === 0) {
-      alert("Não há marcas para normalizar.");
+      showWarning("Não há marcas para normalizar.");
       return;
     }
 
-    const confirmed = window.confirm(
-      `Tem certeza que deseja normalizar ${analysis.mapped_count} marcas?\n\nEsta ação irá padronizar os nomes de marcas de acordo com o mapeamento oficial.`
+    showConfirm(
+      `Tem certeza que deseja normalizar ${analysis.mapped_count} marcas?\n\nEsta ação irá padronizar os nomes de marcas de acordo com o mapeamento oficial.`,
+      async () => {
+        try {
+          setApplying(true);
+          setError(null);
+          setSuccessMessage(null);
+
+          const result =
+            await validationService.applyBrandNormalization(projectId);
+
+          setSuccessMessage(
+            `✅ Normalização concluída! ${result.rows_affected} marcas foram padronizadas.`,
+          );
+
+          // Recarregar análise após aplicação
+          setTimeout(() => {
+            loadAnalysis();
+            setSuccessMessage(null);
+          }, 3000);
+        } catch (err: any) {
+          setError(err.message || "Erro ao aplicar normalização de marcas");
+        } finally {
+          setApplying(false);
+        }
+      },
+      "Normalizar Marcas",
+      "Normalizar",
+      "Cancelar",
     );
-
-    if (!confirmed) return;
-
-    try {
-      setApplying(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const result = await validationService.applyBrandNormalization(projectId);
-
-      setSuccessMessage(
-        `✅ Normalização concluída! ${result.rows_affected} marcas foram padronizadas.`
-      );
-
-      // Recarregar análise após aplicação
-      setTimeout(() => {
-        loadAnalysis();
-        setSuccessMessage(null);
-      }, 3000);
-    } catch (err: any) {
-      setError(err.message || "Erro ao aplicar normalização de marcas");
-    } finally {
-      setApplying(false);
-    }
   };
 
   if (loading) {
@@ -276,7 +282,7 @@ export default function BrandMappingStep({
                                 (correction.occurrences /
                                   analysis.top_corrections[0].occurrences) *
                                   100,
-                                100
+                                100,
                               )}%`,
                             }}
                           />
@@ -502,6 +508,18 @@ export default function BrandMappingStep({
           </p>
         )}
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

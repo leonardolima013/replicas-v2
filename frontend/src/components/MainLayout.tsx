@@ -13,6 +13,8 @@ import {
   History,
 } from "lucide-react";
 import { getCurrentUser, logout } from "../services/authService";
+import Modal from "./Modal";
+import { useModal } from "../hooks/useModal";
 
 interface NavItem {
   id: string;
@@ -82,6 +84,7 @@ export default function MainLayout() {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentUser, setCurrentUser] = useState(() => getCurrentUser());
+  const { modalState, closeModal, showConfirm } = useModal();
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -92,11 +95,16 @@ export default function MainLayout() {
   const navItems = userRole === "adm" ? adminNavItems : devNavItems;
 
   const handleLogout = () => {
-    const confirmed = window.confirm("Tem certeza que deseja sair?");
-    if (confirmed) {
-      logout();
-      navigate("/login");
-    }
+    showConfirm(
+      "Tem certeza que deseja sair?",
+      () => {
+        logout();
+        navigate("/login");
+      },
+      "Confirmar Logout",
+      "Sair",
+      "Cancelar",
+    );
   };
 
   const toggleSidebar = () => {
@@ -240,6 +248,18 @@ export default function MainLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

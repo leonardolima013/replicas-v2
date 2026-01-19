@@ -14,6 +14,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import * as validationService from "../../../services/validationService";
+import Modal from "../../../components/Modal";
+import { useModal } from "../../../hooks/useModal";
 
 interface PublishConfigTabProps {
   projectId: string;
@@ -70,6 +72,7 @@ export default function PublishConfigTab({
   const [publishing, setPublishing] = useState(false);
   const [publishResult, setPublishResult] =
     useState<validationService.PublishResult | null>(null);
+  const { modalState, closeModal, showConfirm } = useModal();
 
   // Configuração de campos
   const [fieldConfigs, setFieldConfigs] = useState<FieldConfig[]>([]);
@@ -91,7 +94,7 @@ export default function PublishConfigTab({
           field,
           mode: "update_if_empty" as FieldMode, // Padrão seguro
           description: FIELD_DESCRIPTIONS[field] || field,
-        })
+        }),
       );
       setFieldConfigs(initialConfigs);
     } catch (err: any) {
@@ -104,62 +107,62 @@ export default function PublishConfigTab({
   const handleFieldModeChange = (field: string, mode: FieldMode) => {
     setFieldConfigs((prev) =>
       prev.map((config) =>
-        config.field === field ? { ...config, mode } : config
-      )
+        config.field === field ? { ...config, mode } : config,
+      ),
     );
   };
 
   const handlePublish = async () => {
     if (!preview?.can_publish) return;
 
-    if (
-      !confirm(
-        `Tem certeza que deseja publicar os dados para o banco de produção?\n\n` +
-          `Esta ação irá:\n` +
-          `• Inserir ${preview.parts_new.toLocaleString()} novas peças\n` +
-          `• Atualizar até ${preview.parts_existing.toLocaleString()} peças existentes\n` +
-          `• Criar ${preview.brands_to_create} novas marcas\n\n` +
-          `Esta ação NÃO pode ser desfeita!`
-      )
-    ) {
-      return;
-    }
+    showConfirm(
+      `Tem certeza que deseja publicar os dados para o banco de produção?\n\n` +
+        `Esta ação irá:\n` +
+        `• Inserir ${preview.parts_new.toLocaleString()} novas peças\n` +
+        `• Atualizar até ${preview.parts_existing.toLocaleString()} peças existentes\n` +
+        `• Criar ${preview.brands_to_create} novas marcas\n\n` +
+        `Esta ação NÃO pode ser desfeita!`,
+      async () => {
+        setPublishing(true);
+        setPublishResult(null);
 
-    setPublishing(true);
-    setPublishResult(null);
+        try {
+          // Montar configuração
+          const configuration: validationService.PublishConfiguration = {
+            force_override: fieldConfigs
+              .filter((c) => c.mode === "force_override")
+              .map((c) => c.field),
+            concatenate: fieldConfigs
+              .filter((c) => c.mode === "concatenate")
+              .map((c) => c.field),
+            update_if_empty: fieldConfigs
+              .filter((c) => c.mode === "update_if_empty")
+              .map((c) => c.field),
+          };
 
-    try {
-      // Montar configuração
-      const configuration: validationService.PublishConfiguration = {
-        force_override: fieldConfigs
-          .filter((c) => c.mode === "force_override")
-          .map((c) => c.field),
-        concatenate: fieldConfigs
-          .filter((c) => c.mode === "concatenate")
-          .map((c) => c.field),
-        update_if_empty: fieldConfigs
-          .filter((c) => c.mode === "update_if_empty")
-          .map((c) => c.field),
-      };
+          const request: validationService.PublishRequest = {
+            configuration,
+          };
 
-      const request: validationService.PublishRequest = {
-        configuration,
-      };
+          const response = await validationService.executePublish(
+            projectId,
+            request,
+          );
+          setPublishResult(response.result);
 
-      const response = await validationService.executePublish(
-        projectId,
-        request
-      );
-      setPublishResult(response.result);
-
-      if (response.result.success && onPublishSuccess) {
-        onPublishSuccess();
-      }
-    } catch (err: any) {
-      setError(err.message || "Erro ao executar publicação");
-    } finally {
-      setPublishing(false);
-    }
+          if (response.result.success && onPublishSuccess) {
+            onPublishSuccess();
+          }
+        } catch (err: any) {
+          setError(err.message || "Erro ao executar publicação");
+        } finally {
+          setPublishing(false);
+        }
+      },
+      "Publicar Dados",
+      "Publicar",
+      "Cancelar",
+    );
   };
 
   // Loading state
@@ -491,10 +494,10 @@ export default function PublishConfigTab({
                           ? mode === "ignore"
                             ? "bg-gray-600 text-white"
                             : mode === "force_override"
-                            ? "bg-red-600 text-white"
-                            : mode === "concatenate"
-                            ? "bg-yellow-600 text-white"
-                            : "bg-green-600 text-white"
+                              ? "bg-red-600 text-white"
+                              : mode === "concatenate"
+                                ? "bg-yellow-600 text-white"
+                                : "bg-green-600 text-white"
                           : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                       }
                     `}
@@ -579,6 +582,18 @@ export default function PublishConfigTab({
           </div>
         )}
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

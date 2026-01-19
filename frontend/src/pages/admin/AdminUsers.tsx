@@ -10,6 +10,8 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import * as usersService from "../../services/usersService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<usersService.User[]>([]);
@@ -22,6 +24,14 @@ export default function AdminUsers() {
     password: "",
     role: "dev",
   });
+  const {
+    modalState,
+    closeModal,
+    showWarning,
+    showSuccess,
+    showError,
+    showConfirm,
+  } = useModal();
 
   useEffect(() => {
     fetchUsers();
@@ -44,7 +54,7 @@ export default function AdminUsers() {
     e.preventDefault();
 
     if (!newUser.usuario || !newUser.password) {
-      alert("Preencha todos os campos");
+      showWarning("Preencha todos os campos");
       return;
     }
 
@@ -55,29 +65,30 @@ export default function AdminUsers() {
       setShowCreateModal(false);
       setNewUser({ usuario: "", password: "", role: "dev" });
       await fetchUsers();
+      showSuccess("Usuário criado com sucesso!");
     } catch (err: any) {
-      alert(err.message || "Erro ao criar usuário");
+      showError(err.message || "Erro ao criar usuário");
     } finally {
       setCreating(false);
     }
   };
 
   const handleDeleteUser = async (username: string) => {
-    if (
-      !window.confirm(
-        `Tem certeza que deseja deletar o usuário ${username}? Esta ação não pode ser desfeita.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await usersService.deleteUser(username);
-      alert(response.msg);
-      await fetchUsers();
-    } catch (err: any) {
-      alert(err.message || "Erro ao deletar usuário");
-    }
+    showConfirm(
+      `Tem certeza que deseja deletar o usuário ${username}? Esta ação não pode ser desfeita.`,
+      async () => {
+        try {
+          const response = await usersService.deleteUser(username);
+          showSuccess(response.msg);
+          await fetchUsers();
+        } catch (err: any) {
+          showError(err.message || "Erro ao deletar usuário");
+        }
+      },
+      "Deletar Usuário",
+      "Deletar",
+      "Cancelar",
+    );
   };
 
   const getRoleBadge = (role: string) => {
@@ -335,6 +346,18 @@ export default function AdminUsers() {
           </div>
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

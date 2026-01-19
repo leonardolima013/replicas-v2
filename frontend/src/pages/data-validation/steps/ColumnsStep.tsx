@@ -13,6 +13,8 @@ import {
   renameColumn,
   type ColumnsAnalysisResponse,
 } from "../../../services/validationService";
+import Modal from "../../../components/Modal";
+import { useModal } from "../../../hooks/useModal";
 
 interface ColumnMapping {
   currentName: string;
@@ -27,15 +29,16 @@ interface ColumnsStepProps {
 export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
   const { projectId } = useParams<{ projectId: string }>();
   const [analysis, setAnalysis] = useState<ColumnsAnalysisResponse | null>(
-    null
+    null,
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [columnMappings, setColumnMappings] = useState<Record<string, string>>(
-    {}
+    {},
   );
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { modalState, closeModal, showWarning } = useModal();
 
   useEffect(() => {
     fetchAnalysis();
@@ -70,11 +73,11 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
 
     // Filtrar apenas as colunas que têm mapeamento definido
     const mappingsToApply = Object.entries(columnMappings).filter(
-      ([_, newName]) => newName && newName !== ""
+      ([_, newName]) => newName && newName !== "",
     );
 
     if (mappingsToApply.length === 0) {
-      alert("Nenhuma alteração selecionada para aplicar.");
+      showWarning("Nenhuma alteração selecionada para aplicar.");
       return;
     }
 
@@ -89,7 +92,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
       }
 
       setSuccessMessage(
-        `${mappingsToApply.length} coluna(s) renomeada(s) com sucesso!`
+        `${mappingsToApply.length} coluna(s) renomeada(s) com sucesso!`,
       );
 
       // Recarregar análise
@@ -377,7 +380,7 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
                         onChange={(e) =>
                           handleMappingChange(
                             column.currentName,
-                            e.target.value
+                            e.target.value,
                           )
                         }
                         disabled={readOnly}
@@ -436,6 +439,18 @@ export default function ColumnsStep({ readOnly = false }: ColumnsStepProps) {
           Modo somente leitura - Para editar, cancele o envio do projeto
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

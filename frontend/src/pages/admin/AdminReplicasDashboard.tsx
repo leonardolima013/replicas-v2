@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { RefreshCw, Trash2, AlertTriangle, Database, X } from "lucide-react";
 import * as replicasService from "../../services/replicasService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 interface ConfirmDeleteAllModalProps {
   isOpen: boolean;
@@ -120,12 +122,14 @@ function ConfirmDeleteAllModal({
 
 export default function AdminReplicasDashboard() {
   const [replicas, setReplicas] = useState<replicasService.AdminReplicaItem[]>(
-    []
+    [],
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const { modalState, closeModal, showConfirm, showSuccess, showError } =
+    useModal();
 
   const fetchReplicas = async () => {
     setLoading(true);
@@ -146,36 +150,40 @@ export default function AdminReplicasDashboard() {
   }, []);
 
   const handleDeleteSingle = async (username: string, containerId: string) => {
-    const confirmed = window.confirm(
-      `Tem certeza que deseja derrubar o banco de ${username}?\n\nContainer: ${containerId}`
+    showConfirm(
+      `Tem certeza que deseja derrubar o banco de ${username}?\n\nContainer: ${containerId}`,
+      async () => {
+        setDeletingIds((prev) => new Set(prev).add(containerId));
+
+        try {
+          await replicasService.deleteUserReplica(username);
+          setReplicas((prev) =>
+            prev.filter((r) => r.container_id !== containerId),
+          );
+          showSuccess(`✅ Réplica de ${username} deletada com sucesso`);
+        } catch (err: any) {
+          showError(`❌ ${err.message}`);
+        } finally {
+          setDeletingIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(containerId);
+            return newSet;
+          });
+        }
+      },
+      "Deletar Réplica",
+      "Deletar",
+      "Cancelar",
     );
-
-    if (!confirmed) return;
-
-    setDeletingIds((prev) => new Set(prev).add(containerId));
-
-    try {
-      await replicasService.deleteUserReplica(username);
-      setReplicas((prev) => prev.filter((r) => r.container_id !== containerId));
-      alert(`✅ Réplica de ${username} deletada com sucesso`);
-    } catch (err: any) {
-      alert(`❌ ${err.message}`);
-    } finally {
-      setDeletingIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(containerId);
-        return newSet;
-      });
-    }
   };
 
   const handleDeleteAll = async () => {
     try {
       await replicasService.deleteAllReplicas();
       setReplicas([]);
-      alert(`✅ Todas as réplicas foram deletadas com sucesso`);
+      showSuccess(`✅ Todas as réplicas foram deletadas com sucesso`);
     } catch (err: any) {
-      alert(`❌ ${err.message}`);
+      showError(`❌ ${err.message}`);
     }
   };
 
@@ -363,7 +371,7 @@ export default function AdminReplicasDashboard() {
                         onClick={() =>
                           handleDeleteSingle(
                             replica.username,
-                            replica.container_id
+                            replica.container_id,
                           )
                         }
                         disabled={deletingIds.has(replica.container_id)}
@@ -393,6 +401,18 @@ export default function AdminReplicasDashboard() {
         onClose={() => setShowDeleteAllModal(false)}
         onConfirm={handleDeleteAll}
         totalReplicas={replicas.length}
+      />
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
       />
     </div>
   );

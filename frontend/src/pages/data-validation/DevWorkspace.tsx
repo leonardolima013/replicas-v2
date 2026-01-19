@@ -23,6 +23,8 @@ import StatisticsStep from "./steps/StatisticsStep";
 import ReviewStep from "./steps/ReviewStep";
 import BrandMappingStep from "./steps/BrandMappingStep";
 import * as validationService from "../../services/validationService";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 interface Step {
   id: number;
@@ -96,6 +98,8 @@ export default function DevWorkspace() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { modalState, closeModal, showSuccess, showError, showConfirm } =
+    useModal();
 
   // Buscar informações do projeto ao carregar
   useEffect(() => {
@@ -132,10 +136,10 @@ export default function DevWorkspace() {
     try {
       const updatedProject = await validationService.submitProject(projectId);
       setProjectStatus(updatedProject.status);
-      alert("✅ Projeto enviado para a fila de análise!");
+      showSuccess("✅ Projeto enviado para a fila de análise!");
     } catch (err: any) {
       setError(err.message || "Erro ao enviar projeto");
-      alert(`❌ ${err.message}`);
+      showError(`❌ ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -145,26 +149,31 @@ export default function DevWorkspace() {
   const handleCancel = async () => {
     if (!projectId) return;
 
-    const confirmCancel = window.confirm(
+    showConfirm(
       "Tem certeza que deseja cancelar o envio?\n\n" +
-        "Isso vai retirar o projeto da fila de prioridade do administrador e permitir que você edite novamente."
+        "Isso vai retirar o projeto da fila de prioridade do administrador e permitir que você edite novamente.",
+      async () => {
+        setIsSubmitting(true);
+        setError(null);
+
+        try {
+          const updatedProject =
+            await validationService.cancelProject(projectId);
+          setProjectStatus(updatedProject.status);
+          showSuccess(
+            "✅ Envio cancelado. Você pode editar o projeto novamente.",
+          );
+        } catch (err: any) {
+          setError(err.message || "Erro ao cancelar envio");
+          showError(`❌ ${err.message}`);
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      "Cancelar Envio",
+      "Confirmar",
+      "Voltar",
     );
-
-    if (!confirmCancel) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const updatedProject = await validationService.cancelProject(projectId);
-      setProjectStatus(updatedProject.status);
-      alert("✅ Envio cancelado. Você pode editar o projeto novamente.");
-    } catch (err: any) {
-      setError(err.message || "Erro ao cancelar envio");
-      alert(`❌ ${err.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleNextStep = () => {
@@ -391,6 +400,18 @@ export default function DevWorkspace() {
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

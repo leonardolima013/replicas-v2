@@ -15,6 +15,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import * as validationService from "../../../services/validationService";
+import Modal from "../../../components/Modal";
+import { useModal } from "../../../hooks/useModal";
 
 interface SimilaritiesStepProps {
   readOnly?: boolean;
@@ -35,6 +37,7 @@ export default function SimilaritiesStep({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
   const [showStatistics, setShowStatistics] = useState(false);
+  const { modalState, closeModal, showConfirm } = useModal();
 
   useEffect(() => {
     if (projectId) {
@@ -51,7 +54,7 @@ export default function SimilaritiesStep({
       const data = await validationService.getSimilaritiesDiagnosis(
         projectId,
         currentPage,
-        pageSize
+        pageSize,
       );
       setDiagnosis(data);
     } catch (err: any) {
@@ -76,39 +79,41 @@ export default function SimilaritiesStep({
   const handleFixAll = async () => {
     if (!projectId || readOnly) return;
 
-    const confirmed = window.confirm(
+    showConfirm(
       `Tem certeza que deseja aplicar todas as correções?\n\n` +
         `Isso irá:\n` +
         `- Normalizar search_ref (remover espaços e caracteres especiais)\n` +
         `- Converter marcas para MAIÚSCULAS\n` +
         `- Aplicar mapeamento de marcas\n` +
-        `- Validar referências existentes no projeto`
+        `- Validar referências existentes no projeto`,
+      async () => {
+        try {
+          setFixing(true);
+          setError(null);
+          setSuccessMessage(null);
+
+          const result = await validationService.fixAllSimilarities(projectId);
+
+          setSuccessMessage(
+            `✅ Correções aplicadas! ${result.rows_affected} linhas foram processadas.`,
+          );
+
+          // Recarregar diagnóstico após correção
+          setTimeout(() => {
+            setCurrentPage(1);
+            loadDiagnosis();
+            setSuccessMessage(null);
+          }, 3000);
+        } catch (err: any) {
+          setError(err.message || "Erro ao aplicar correções");
+        } finally {
+          setFixing(false);
+        }
+      },
+      "Aplicar Correções",
+      "Aplicar",
+      "Cancelar",
     );
-
-    if (!confirmed) return;
-
-    try {
-      setFixing(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const result = await validationService.fixAllSimilarities(projectId);
-
-      setSuccessMessage(
-        `✅ Correções aplicadas! ${result.rows_affected} linhas foram processadas.`
-      );
-
-      // Recarregar diagnóstico após correção
-      setTimeout(() => {
-        setCurrentPage(1);
-        loadDiagnosis();
-        setSuccessMessage(null);
-      }, 3000);
-    } catch (err: any) {
-      setError(err.message || "Erro ao aplicar correções");
-    } finally {
-      setFixing(false);
-    }
   };
 
   if (loading) {
@@ -542,7 +547,7 @@ export default function SimilaritiesStep({
                         {row.similarity_value
                           ? JSON.stringify(row.similarity_value).substring(
                               0,
-                              50
+                              50,
                             ) + "..."
                           : "null"}
                       </code>
@@ -594,7 +599,7 @@ export default function SimilaritiesStep({
                 <button
                   onClick={() =>
                     setCurrentPage((p) =>
-                      Math.min(diagnosis.total_pages, p + 1)
+                      Math.min(diagnosis.total_pages, p + 1),
                     )
                   }
                   disabled={currentPage === diagnosis.total_pages}
@@ -777,6 +782,18 @@ export default function SimilaritiesStep({
           )}
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

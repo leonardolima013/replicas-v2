@@ -16,18 +16,20 @@ import {
 import * as validationService from "../../services/validationService";
 import QualityReportTab from "./components/QualityReportTab";
 import PublishConfigTab from "./components/PublishConfigTab";
+import Modal from "../../components/Modal";
+import { useModal } from "../../hooks/useModal";
 
 export default function AdminValidationReview() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
 
   const [project, setProject] = useState<validationService.Project | null>(
-    null
+    null,
   );
   const [progress, setProgress] =
     useState<validationService.ProjectProgress | null>(null);
   const [report, setReport] = useState<validationService.ProjectReport | null>(
-    null
+    null,
   );
   const [previewData, setPreviewData] =
     useState<validationService.PreviewResponse | null>(null);
@@ -36,8 +38,9 @@ export default function AdminValidationReview() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"preview" | "quality" | "publish">(
-    "preview"
+    "preview",
   );
+  const { modalState, closeModal, showConfirm, showError } = useModal();
 
   const pageSize = 50;
 
@@ -61,9 +64,8 @@ export default function AdminValidationReview() {
   const fetchProgress = useCallback(async () => {
     if (!projectId) return;
     try {
-      const progressData = await validationService.getProjectProgress(
-        projectId
-      );
+      const progressData =
+        await validationService.getProjectProgress(projectId);
       setProgress(progressData);
 
       // Se terminou de processar, buscar dados atualizados
@@ -92,7 +94,7 @@ export default function AdminValidationReview() {
       ]);
 
       const currentProject = projectsResponse.projects.find(
-        (p) => p.id === projectId
+        (p) => p.id === projectId,
       );
 
       if (!currentProject) {
@@ -108,7 +110,7 @@ export default function AdminValidationReview() {
       ];
       if (!allowedStatuses.includes(currentProject.status)) {
         throw new Error(
-          `Este projeto não está em processo de revisão (status: ${currentProject.status})`
+          `Este projeto não está em processo de revisão (status: ${currentProject.status})`,
         );
       }
 
@@ -117,18 +119,16 @@ export default function AdminValidationReview() {
 
       // Buscar progresso se estiver processando
       if (currentProject.status === "PROCESSING_REPORT") {
-        const progressData = await validationService.getProjectProgress(
-          projectId
-        );
+        const progressData =
+          await validationService.getProjectProgress(projectId);
         setProgress(progressData);
       }
 
       // Buscar relatório se estiver pronto para publicar
       if (currentProject.status === "READY_TO_PUBLISH") {
         try {
-          const reportData = await validationService.getProjectReport(
-            projectId
-          );
+          const reportData =
+            await validationService.getProjectReport(projectId);
           setReport(reportData);
         } catch (err) {
           console.error("Erro ao buscar relatório:", err);
@@ -151,7 +151,7 @@ export default function AdminValidationReview() {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("access_token")}`,
           },
-        }
+        },
       );
 
       if (!response.ok) {
@@ -164,42 +164,42 @@ export default function AdminValidationReview() {
       a.href = url;
       a.download = `${project.original_filename.replace(
         ".csv",
-        ""
+        "",
       )}_processed.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err: any) {
-      alert(err.message || "Erro ao baixar CSV");
+      showError(err.message || "Erro ao baixar CSV");
     }
   };
 
   const handleReject = async () => {
     if (!projectId) return;
 
-    if (
-      !confirm(
-        "Tem certeza que deseja REJEITAR este projeto? Esta ação não pode ser desfeita."
-      )
-    ) {
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      // TODO: Implementar endpoint de rejeição no backend
-      // Por enquanto, apenas exibir mensagem
-      alert(
-        "Funcionalidade de rejeição será implementada no backend. Projeto será deletado ou marcado como REJECTED."
-      );
-      // await validationService.rejectProject(projectId);
-      // navigate("/admin/validation");
-    } catch (err: any) {
-      alert(err.message || "Erro ao rejeitar projeto");
-    } finally {
-      setActionLoading(false);
-    }
+    showConfirm(
+      "Tem certeza que deseja REJEITAR este projeto? Esta ação não pode ser desfeita.",
+      async () => {
+        setActionLoading(true);
+        try {
+          // TODO: Implementar endpoint de rejeição no backend
+          // Por enquanto, apenas exibir mensagem
+          showError(
+            "Funcionalidade de rejeição será implementada no backend. Projeto será deletado ou marcado como REJECTED.",
+          );
+          // await validationService.rejectProject(projectId);
+          // navigate("/admin/validation");
+        } catch (err: any) {
+          showError(err.message || "Erro ao rejeitar projeto");
+        } finally {
+          setActionLoading(false);
+        }
+      },
+      "Rejeitar Projeto",
+      "Rejeitar",
+      "Cancelar",
+    );
   };
 
   const handleRetry = async () => {
@@ -211,7 +211,7 @@ export default function AdminValidationReview() {
       // Atualizar o projeto para mostrar que está processando novamente
       await fetchProjectData();
     } catch (err: any) {
-      alert(err.message || "Erro ao reprocessar projeto");
+      showError(err.message || "Erro ao reprocessar projeto");
     } finally {
       setActionLoading(false);
     }
@@ -220,24 +220,24 @@ export default function AdminValidationReview() {
   const handleRecalculate = async () => {
     if (!projectId) return;
 
-    if (
-      !confirm(
-        "Tem certeza que deseja recalcular o relatório? O processamento será reiniciado."
-      )
-    ) {
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      await validationService.recalculateProjectReport(projectId);
-      // Atualizar o projeto para mostrar que está processando
-      await fetchProjectData();
-    } catch (err: any) {
-      alert(err.message || "Erro ao recalcular relatório");
-    } finally {
-      setActionLoading(false);
-    }
+    showConfirm(
+      "Tem certeza que deseja recalcular o relatório? O processamento será reiniciado.",
+      async () => {
+        setActionLoading(true);
+        try {
+          await validationService.recalculateProjectReport(projectId);
+          // Atualizar o projeto para mostrar que está processando
+          await fetchProjectData();
+        } catch (err: any) {
+          showError(err.message || "Erro ao recalcular relatório");
+        } finally {
+          setActionLoading(false);
+        }
+      },
+      "Recalcular Relatório",
+      "Recalcular",
+      "Cancelar",
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -713,8 +713,8 @@ export default function AdminValidationReview() {
                       {isReady
                         ? "Ir para Publicação"
                         : isProcessing
-                        ? "Processando..."
-                        : "Aguardando"}
+                          ? "Processando..."
+                          : "Aguardando"}
                     </button>
                   </div>
                 </div>
@@ -763,8 +763,8 @@ export default function AdminValidationReview() {
                       {isReady
                         ? "Ir para Publicação"
                         : isProcessing
-                        ? "Processando..."
-                        : "Aguardando"}
+                          ? "Processando..."
+                          : "Aguardando"}
                     </button>
                   </div>
                 </div>
@@ -788,6 +788,18 @@ export default function AdminValidationReview() {
           )}
         </>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

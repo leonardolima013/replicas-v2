@@ -13,6 +13,8 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import * as validationService from "../../../services/validationService";
+import Modal from "../../../components/Modal";
+import { useModal } from "../../../hooks/useModal";
 
 interface DuplicatesDiagnosisProps {
   readOnly?: boolean;
@@ -30,6 +32,7 @@ export default function DuplicatesStep({
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(50);
+  const { modalState, closeModal, showConfirm } = useModal();
 
   useEffect(() => {
     if (projectId) {
@@ -46,7 +49,7 @@ export default function DuplicatesStep({
       const data = await validationService.getDuplicatesDiagnosis(
         projectId,
         currentPage,
-        pageSize
+        pageSize,
       );
       setDiagnosis(data);
     } catch (err: any) {
@@ -59,34 +62,36 @@ export default function DuplicatesStep({
   const handleRemoveDuplicates = async () => {
     if (!projectId || readOnly) return;
 
-    const confirmed = window.confirm(
-      `Tem certeza que deseja remover ${diagnosis?.total_duplicates} registos duplicados?\n\nApenas a primeira ocorrência de cada combinação (search_ref + brand) será mantida.`
+    showConfirm(
+      `Tem certeza que deseja remover ${diagnosis?.total_duplicates} registos duplicados?\n\nApenas a primeira ocorrência de cada combinação (search_ref + brand) será mantida.`,
+      async () => {
+        try {
+          setRemoving(true);
+          setError(null);
+          setSuccessMessage(null);
+
+          const result = await validationService.removeDuplicates(projectId);
+
+          setSuccessMessage(
+            `✅ Limpeza concluída! ${result.rows_affected} registos duplicados foram removidos.`,
+          );
+
+          // Recarregar diagnóstico após remoção
+          setTimeout(() => {
+            setCurrentPage(1); // Voltar para a primeira página
+            loadDiagnosis();
+            setSuccessMessage(null);
+          }, 3000);
+        } catch (err: any) {
+          setError(err.message || "Erro ao remover duplicatas");
+        } finally {
+          setRemoving(false);
+        }
+      },
+      "Remover Duplicatas",
+      "Remover",
+      "Cancelar",
     );
-
-    if (!confirmed) return;
-
-    try {
-      setRemoving(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      const result = await validationService.removeDuplicates(projectId);
-
-      setSuccessMessage(
-        `✅ Limpeza concluída! ${result.rows_affected} registos duplicados foram removidos.`
-      );
-
-      // Recarregar diagnóstico após remoção
-      setTimeout(() => {
-        setCurrentPage(1); // Voltar para a primeira página
-        loadDiagnosis();
-        setSuccessMessage(null);
-      }, 3000);
-    } catch (err: any) {
-      setError(err.message || "Erro ao remover duplicatas");
-    } finally {
-      setRemoving(false);
-    }
   };
 
   if (loading) {
@@ -298,7 +303,7 @@ export default function DuplicatesStep({
                   Exibindo {(diagnosis.page - 1) * diagnosis.page_size + 1} -{" "}
                   {Math.min(
                     diagnosis.page * diagnosis.page_size,
-                    diagnosis.total_duplicates
+                    diagnosis.total_duplicates,
                   )}{" "}
                   de {diagnosis.total_duplicates} registos
                 </p>
@@ -353,7 +358,7 @@ export default function DuplicatesStep({
                             {pageNum}
                           </button>
                         );
-                      }
+                      },
                     )}
                   </div>
 
@@ -406,6 +411,18 @@ export default function DuplicatesStep({
           </div>
         </div>
       )}
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }

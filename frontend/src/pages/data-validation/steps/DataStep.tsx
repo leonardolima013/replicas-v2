@@ -24,6 +24,8 @@ import {
   fixUppercase,
   fixNullNumerics,
 } from "../../../services/validationService";
+import Modal from "../../../components/Modal";
+import { useModal } from "../../../hooks/useModal";
 
 // Interface baseada no schema TreatmentDiagnosisResponse do backend
 interface DiagnosisData {
@@ -154,11 +156,12 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
   const [loadingDiagnosis, setLoadingDiagnosis] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>(
-    {}
+    {},
   );
   const [successMessages, setSuccessMessages] = useState<
     Record<string, string>
   >({});
+  const { modalState, closeModal, showError } = useModal();
 
   useEffect(() => {
     fetchDiagnosis();
@@ -202,7 +205,7 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
         [card.id]: `${
           response.rows_affected
         } linhas corrigidas! Colunas afetadas: ${response.columns_affected.join(
-          ", "
+          ", ",
         )}`,
       }));
 
@@ -210,7 +213,7 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
       await fetchDiagnosis();
     } catch (err: any) {
       console.error(`Erro ao corrigir ${card.id}:`, err);
-      alert(`Erro ao aplicar correções: ${err.message}`);
+      showError(`Erro ao aplicar correções: ${err.message}`);
     } finally {
       // Desativar loading
       setLoadingStates((prev) => ({ ...prev, [card.id]: false }));
@@ -424,6 +427,18 @@ export default function DataStep({ readOnly = false }: DataStepProps) {
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        message={modalState.message}
+        type={modalState.type}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+      />
     </div>
   );
 }
