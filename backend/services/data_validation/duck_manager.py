@@ -2,6 +2,7 @@ import duckdb
 import os
 import pandas as pd
 import re
+import json
 from backend.services.data_validation.mapping_service import get_brand_mapping_service
 
 # Pasta onde os ficheiros .duckdb ficam guardados
@@ -1092,6 +1093,486 @@ class DuckSession:
             return {
                 "rows_affected": rows_to_update,
                 "message": f"Normalização de marcas aplicada com sucesso"
+            }
+        finally:
+            conn.close()
+    # --- VALIDAÇÃO DE SIMILARIDADES ---
+
+    def diagnose_similarities(self, table_name: str = "raw_data", page: int = 1, page_size: int = 20):
+        """
+        Diagnostica a coluna similarity e retorna preview paginado das linhas com problemas.
+        
+        Validações Nível 3:
+        - Verifica se a coluna existe
+        - Valida formato JSON (lista de dicionários)
+        - Valida chaves obrigatórias (search_ref e brand)
+        - Valida search_ref (sem espaços nem caracteres especiais)
+        - Valida brand (deve estar em MAIÚSCULAS)
+        - Verifica se search_ref existe no projeto
+        - Verifica se brand está no mapeamento
+        - Verifica se valores NULL devem ser []
+        
+        Returns:
+            dict: Dicionário com diagnóstico e preview paginado
+        """
+        conn = self._get_conn(read_only=True)
+        try:
+            # Verificar se a coluna similarity existe
+            columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+            current_columns = set([col[0] for col in columns_info])
+            
+            if "similarity" not in current_columns:
+                return {
+                    "column_exists": False,
+                    "format_issues": 0,
+                    "search_ref_issues": 0,
+                    "brand_issues": 0,
+                    "invalid_refs": 0,
+                    "invalid_brands": 0,
+                    "empty_list_issues": 0,
+                    "total_issues": 0,
+                    "preview": [],
+                    "page": page,
+                    "page_size": page_size,
+                    "total_pages": 0
+                }
+            
+            # Carregar mapeamento de marcas para validação
+            mapping_service = get_brand_mapping_service()
+            mapping_df = mapping_service.get_mapping_df()
+            known_brands = set(mapping_df['target'].unique())
+            
+            # Obter todos os search_refs válidos do projeto
+            valid_refs_query = f"SELECT DISTINCT search_ref FROM {table_name} WHERE search_ref IS NOT NULL"
+            valid_refs_df = conn.execute(valid_refs_query).fetchdf()
+            valid_refs = set(valid_refs_df['search_ref'].tolist())
+            
+            # Contadores de problemas
+            format_issues = 0
+            search_ref_issues = 0
+            brand_issues = 0
+            invalid_refs = 0
+            invalid_brands = 0
+            empty_list_issues = 0
+            
+            # Buscar todas as linhas para análise
+            query = f"""
+                SELECT 
+                    ROW_NUMBER() OVER () as row_number,
+                    search_ref,
+                    brand,
+                    similarity
+                FROM {table_name}
+            """
+            df = conn.execute(query).fetchdf()
+            
+            # Lista para armazenar linhas com problemas
+            problematic_rows = []
+            
+            for _, row in df.iterrows():
+                issues = []
+                similarity_value = row['similarity']
+                
+                # Verificar se é NULL (deveria ser [])
+                if pd.isna(similarity_value) or similarity_value is None:
+                    empty_list_issues += 1
+                    issues.append("NULL ao invés de []")
+                    problematic_rows.append({
+                        "row_number": int(row['row_number']),
+                        "search_ref": row['search_ref'],
+                        "brand": row['brand'],
+                        "similarity_value": None,
+                        "issues": issues
+                    })
+                    continue
+                
+                # Tentar parsear JSON
+                try:
+                    if isinstance(similarity_value, str):
+                        # Tentar corrigir aspas simples para aspas duplas
+                        try:
+                            similarities = json.loads(similarity_value)
+                        except json.JSONDecodeError:
+                            # Se falhar, tentar substituir aspas simples por duplas
+                            try:
+                                similarity_value_fixed = similarity_value.replace("'", '"')
+                                similarities = json.loads(similarity_value_fixed)
+                            except json.JSONDecodeError:
+                                # Último recurso: usar ast.literal_eval para Python literals
+                                import ast
+                                similarities = ast.literal_eval(similarity_value)
+                    else:
+                        similarities = similarity_value
+                    
+                    # Verificar se é uma lista
+                    if not isinstance(similarities, list):
+                        format_issues += 1
+                        issues.append("Não é uma lista")
+                        problematic_rows.append({
+                            "row_number": int(row['row_number']),
+                            "search_ref": row['search_ref'],
+                            "brand": row['brand'],
+                            "similarity_value": similarity_value,
+                            "issues": issues
+                        })
+                        continue
+                    
+                    # Se lista vazia, está OK
+                    if len(similarities) == 0:
+                        continue
+                    
+                    # Validar cada item da lista
+                    for sim in similarities:
+                        # Verificar se é um dicionário
+                        if not isinstance(sim, dict):
+                            format_issues += 1
+                            issues.append("Item não é dicionário")
+                            break
+                        
+                        # Verificar chaves obrigatórias
+                        if 'search_ref' not in sim or 'brand' not in sim:
+                            format_issues += 1
+                            issues.append("Faltam chaves obrigatórias")
+                            break
+                        
+                        # Validar search_ref (sem espaços nem caracteres especiais)
+                        sim_ref = sim.get('search_ref', '')
+                        if sim_ref:
+                            if not re.match(r'^[A-Za-z0-9_]+$', str(sim_ref)):
+                                search_ref_issues += 1
+                                issues.append(f"search_ref inválido: {sim_ref}")
+                        
+                        # Validar brand (deve estar em MAIÚSCULAS)
+                        sim_brand = sim.get('brand', '')
+                        if sim_brand:
+                            if sim_brand != sim_brand.upper():
+                                brand_issues += 1
+                                issues.append(f"brand em minúsculas: {sim_brand}")
+                            
+                            # Contar brand desconhecida apenas para estatísticas (não é erro)
+                            if sim_brand.upper() not in known_brands:
+                                invalid_brands += 1
+                        
+                        # Contar search_ref inexistente apenas para estatísticas (não é erro)
+                        if sim_ref and sim_ref not in valid_refs:
+                            invalid_refs += 1
+                    
+                    if issues:
+                        problematic_rows.append({
+                            "row_number": int(row['row_number']),
+                            "search_ref": row['search_ref'],
+                            "brand": row['brand'],
+                            "similarity_value": similarities,
+                            "issues": issues
+                        })
+                        
+                except json.JSONDecodeError:
+                    format_issues += 1
+                    issues.append("JSON inválido")
+                    problematic_rows.append({
+                        "row_number": int(row['row_number']),
+                        "search_ref": row['search_ref'],
+                        "brand": row['brand'],
+                        "similarity_value": similarity_value,
+                        "issues": issues
+                    })
+                except Exception as e:
+                    format_issues += 1
+                    issues.append(f"Erro: {str(e)}")
+                    problematic_rows.append({
+                        "row_number": int(row['row_number']),
+                        "search_ref": row['search_ref'],
+                        "brand": row['brand'],
+                        "similarity_value": similarity_value,
+                        "issues": issues
+                    })
+            
+            # Paginação
+            total_issues = len(problematic_rows)
+            total_pages = (total_issues + page_size - 1) // page_size if total_issues > 0 else 0
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            preview = problematic_rows[start_idx:end_idx]
+            
+            return {
+                "column_exists": True,
+                "format_issues": format_issues,
+                "search_ref_issues": search_ref_issues,
+                "brand_issues": brand_issues,
+                "invalid_refs": invalid_refs,
+                "invalid_brands": invalid_brands,
+                "empty_list_issues": empty_list_issues,
+                "total_issues": total_issues,
+                "preview": preview,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+        finally:
+            conn.close()
+
+    def fix_all_similarities(self, table_name: str = "raw_data"):
+        """
+        Aplica todas as correções na coluna similarity:
+        - Converte NULL para []
+        - Normaliza search_ref (remove espaços e caracteres especiais)
+        - Converte brands para MAIÚSCULAS
+        - Aplica mapeamento de marcas
+        
+        Returns:
+            dict: Dicionário com número de linhas afetadas
+        """
+        conn = self._get_conn(read_only=False)
+        try:
+            # Verificar se a coluna similarity existe
+            columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+            current_columns = set([col[0] for col in columns_info])
+            
+            if "similarity" not in current_columns:
+                return {"rows_affected": 0}
+            
+            # Carregar mapeamento de marcas
+            mapping_service = get_brand_mapping_service()
+            mapping_df = mapping_service.get_mapping_df()
+            
+            # Criar dicionário de mapeamento
+            brand_mapping = dict(zip(mapping_df['source'], mapping_df['target']))
+            
+            # Buscar todas as linhas
+            query = f"SELECT * FROM {table_name}"
+            df = conn.execute(query).fetchdf()
+            
+            rows_affected = 0
+            
+            # Processar cada linha
+            for idx, row in df.iterrows():
+                similarity_value = row['similarity']
+                
+                # Se NULL, converter para []
+                if pd.isna(similarity_value) or similarity_value is None:
+                    df.at[idx, 'similarity'] = '[]'
+                    rows_affected += 1
+                    continue
+                
+                try:
+                    # Parsear JSON
+                    if isinstance(similarity_value, str):
+                        # Tentar corrigir aspas simples para aspas duplas
+                        try:
+                            similarities = json.loads(similarity_value)
+                        except json.JSONDecodeError:
+                            # Se falhar, tentar substituir aspas simples por duplas
+                            try:
+                                similarity_value_fixed = similarity_value.replace("'", '"')
+                                similarities = json.loads(similarity_value_fixed)
+                            except json.JSONDecodeError:
+                                # Último recurso: usar ast.literal_eval para Python literals
+                                import ast
+                                similarities = ast.literal_eval(similarity_value)
+                    else:
+                        similarities = similarity_value
+                    
+                    if not isinstance(similarities, list):
+                        df.at[idx, 'similarity'] = '[]'
+                        rows_affected += 1
+                        continue
+                    
+                    # Se lista vazia, não precisa processar
+                    if len(similarities) == 0:
+                        continue
+                    
+                    # Flag para rastrear se houve mudanças
+                    has_changes = False
+                    
+                    # Processar cada similaridade
+                    for sim in similarities:
+                        if isinstance(sim, dict):
+                            # Normalizar search_ref
+                            if 'search_ref' in sim:
+                                original_ref = sim['search_ref']
+                                normalized_ref = re.sub(r'[^A-Za-z0-9_]', '', str(original_ref))
+                                if normalized_ref != original_ref:
+                                    sim['search_ref'] = normalized_ref
+                                    has_changes = True
+                            
+                            # Converter brand para MAIÚSCULAS e aplicar mapeamento
+                            if 'brand' in sim:
+                                original_brand = sim['brand']
+                                upper_brand = str(original_brand).upper()
+                                
+                                # Aplicar mapeamento
+                                mapped_brand = brand_mapping.get(upper_brand, upper_brand)
+                                
+                                if mapped_brand != original_brand:
+                                    sim['brand'] = mapped_brand
+                                    has_changes = True
+                    
+                    # Salvar apenas se houve mudanças
+                    if has_changes:
+                        df.at[idx, 'similarity'] = json.dumps(similarities)
+                        rows_affected += 1
+                        
+                except Exception as e:
+                    # Em caso de erro de parsing, converter para []
+                    print(f"Erro ao processar similarity na linha {idx}: {str(e)}")
+                    df.at[idx, 'similarity'] = '[]'
+                    rows_affected += 1
+            
+            # Substituir tabela com dados corrigidos
+            if rows_affected > 0:
+                conn.execute(f"DROP TABLE {table_name}")
+                conn.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+            
+            return {"rows_affected": rows_affected}
+        finally:
+            conn.close()
+
+    def get_similarities_statistics(self, table_name: str = "raw_data"):
+        """
+        Retorna estatísticas detalhadas sobre as similaridades.
+        
+        Returns:
+            dict: Dicionário com estatísticas completas
+        """
+        conn = self._get_conn(read_only=True)
+        try:
+            # Verificar se a coluna similarity existe
+            columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+            current_columns = set([col[0] for col in columns_info])
+            
+            if "similarity" not in current_columns:
+                return {
+                    "total_rows": 0,
+                    "rows_with_similarities": 0,
+                    "percentage_with_similarities": 0.0,
+                    "total_similarities": 0,
+                    "avg_similarities_per_row": 0.0,
+                    "top_search_refs": [],
+                    "top_brands": [],
+                    "distribution": [],
+                    "invalid_search_refs": [],
+                    "invalid_brands": []
+                }
+            
+            # Carregar mapeamento de marcas para validação
+            mapping_service = get_brand_mapping_service()
+            mapping_df = mapping_service.get_mapping_df()
+            known_brands = set(mapping_df['target'].unique())
+            
+            # Obter todos os search_refs válidos do projeto
+            valid_refs_query = f"SELECT DISTINCT search_ref FROM {table_name} WHERE search_ref IS NOT NULL"
+            valid_refs_df = conn.execute(valid_refs_query).fetchdf()
+            valid_refs = set(valid_refs_df['search_ref'].tolist())
+            
+            # Buscar todas as linhas
+            query = f"SELECT similarity FROM {table_name}"
+            df = conn.execute(query).fetchdf()
+            
+            total_rows = len(df)
+            rows_with_similarities = 0
+            total_similarities = 0
+            
+            search_ref_counter = {}
+            brand_counter = {}
+            distribution_counter = {}
+            invalid_refs_set = set()
+            invalid_brands_set = set()
+            
+            for _, row in df.iterrows():
+                similarity_value = row['similarity']
+                
+                # Pular NULL ou valores vazios
+                if pd.isna(similarity_value) or similarity_value is None:
+                    continue
+                
+                try:
+                    # Parsear JSON
+                    if isinstance(similarity_value, str):
+                        # Tentar corrigir aspas simples para aspas duplas
+                        try:
+                            similarities = json.loads(similarity_value)
+                        except json.JSONDecodeError:
+                            # Se falhar, tentar substituir aspas simples por duplas
+                            try:
+                                similarity_value_fixed = similarity_value.replace("'", '"')
+                                similarities = json.loads(similarity_value_fixed)
+                            except json.JSONDecodeError:
+                                # Último recurso: usar ast.literal_eval para Python literals
+                                import ast
+                                similarities = ast.literal_eval(similarity_value)
+                    else:
+                        similarities = similarity_value
+                    
+                    if not isinstance(similarities, list):
+                        continue
+                    
+                    # Se lista vazia, pular
+                    if len(similarities) == 0:
+                        continue
+                    
+                    rows_with_similarities += 1
+                    num_sims = len(similarities)
+                    total_similarities += num_sims
+                    
+                    # Atualizar distribuição
+                    distribution_counter[num_sims] = distribution_counter.get(num_sims, 0) + 1
+                    
+                    # Processar cada similaridade
+                    for sim in similarities:
+                        if isinstance(sim, dict):
+                            # Contar search_ref
+                            sim_ref = sim.get('search_ref')
+                            if sim_ref:
+                                search_ref_counter[sim_ref] = search_ref_counter.get(sim_ref, 0) + 1
+                                
+                                # Verificar se ref existe
+                                if sim_ref not in valid_refs:
+                                    invalid_refs_set.add(sim_ref)
+                            
+                            # Contar brand
+                            sim_brand = sim.get('brand')
+                            if sim_brand:
+                                brand_counter[sim_brand] = brand_counter.get(sim_brand, 0) + 1
+                                
+                                # Verificar se brand existe no mapeamento
+                                if sim_brand not in known_brands:
+                                    invalid_brands_set.add(sim_brand)
+                                    
+                except Exception:
+                    continue
+            
+            # Calcular percentual
+            percentage = (rows_with_similarities / total_rows * 100) if total_rows > 0 else 0.0
+            
+            # Calcular média
+            avg = (total_similarities / rows_with_similarities) if rows_with_similarities > 0 else 0.0
+            
+            # Top 10 search_refs
+            top_refs = sorted(search_ref_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+            top_search_refs = [{"search_ref": ref, "count": count} for ref, count in top_refs]
+            
+            # Top 10 brands
+            top_brands_list = sorted(brand_counter.items(), key=lambda x: x[1], reverse=True)[:10]
+            top_brands = [{"brand": brand, "count": count} for brand, count in top_brands_list]
+            
+            # Distribuição
+            distribution = sorted(
+                [{"similarity_count": count, "row_count": rows} 
+                 for count, rows in distribution_counter.items()],
+                key=lambda x: x['similarity_count']
+            )
+            
+            return {
+                "total_rows": total_rows,
+                "rows_with_similarities": rows_with_similarities,
+                "percentage_with_similarities": round(percentage, 2),
+                "total_similarities": total_similarities,
+                "avg_similarities_per_row": round(avg, 2),
+                "top_search_refs": top_search_refs,
+                "top_brands": top_brands,
+                "distribution": distribution,
+                "invalid_search_refs": sorted(list(invalid_refs_set)),
+                "invalid_brands": sorted(list(invalid_brands_set))
             }
         finally:
             conn.close()

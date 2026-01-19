@@ -10,6 +10,7 @@ import {
   Settings,
   LogOut,
   User,
+  History,
 } from "lucide-react";
 import { getCurrentUser, logout } from "../services/authService";
 
@@ -61,6 +62,12 @@ const adminNavItems: NavItem[] = [
     label: "Aprovação de Validações",
     path: "/admin/validation",
     icon: <ShieldCheck className="w-5 h-5" />,
+  },
+  {
+    id: "validation-history",
+    label: "Histórico de Validações",
+    path: "/admin/validation/history",
+    icon: <History className="w-5 h-5" />,
   },
   {
     id: "replicas-management",

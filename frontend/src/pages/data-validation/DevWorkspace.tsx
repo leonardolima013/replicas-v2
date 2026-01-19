@@ -12,10 +12,12 @@ import {
   BarChart3,
   Copy,
   Sparkles,
+  Link2,
 } from "lucide-react";
 import ViewStep from "./steps/ViewStep";
 import ColumnsStep from "./steps/ColumnsStep";
 import DuplicatesStep from "./steps/DuplicatesStep";
+import SimilaritiesStep from "./steps/SimilaritiesStep";
 import DataStep from "./steps/DataStep";
 import StatisticsStep from "./steps/StatisticsStep";
 import ReviewStep from "./steps/ReviewStep";
@@ -62,12 +64,18 @@ const steps: Step[] = [
   },
   {
     id: 5,
+    title: "Similaridades",
+    icon: <Link2 className="w-5 h-5" />,
+    getComponent: (readOnly) => <SimilaritiesStep readOnly={readOnly} />,
+  },
+  {
+    id: 6,
     title: "Estatísticas",
     icon: <BarChart3 className="w-5 h-5" />,
     getComponent: () => <StatisticsStep />,
   },
   {
-    id: 6,
+    id: 7,
     title: "Revisão e Envio",
     icon: <Send className="w-5 h-5" />,
     getComponent: () => <ReviewStep />,
@@ -78,7 +86,12 @@ export default function DevWorkspace() {
   const { projectId } = useParams<{ projectId: string }>();
   const [currentStep, setCurrentStep] = useState(0);
   const [projectStatus, setProjectStatus] = useState<
-    "DRAFT" | "PENDING" | "DONE"
+    | "DRAFT"
+    | "PENDING_REVIEW"
+    | "PROCESSING_REPORT"
+    | "READY_TO_PUBLISH"
+    | "PROCESSING_ERROR"
+    | "DONE"
   >("DRAFT");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -165,7 +178,10 @@ export default function DevWorkspace() {
 
   const isLastStep = currentStep === steps.length - 1;
   const isDraft = projectStatus === "DRAFT";
-  const isPending = projectStatus === "PENDING";
+  const isPending =
+    projectStatus === "PENDING_REVIEW" ||
+    projectStatus === "PROCESSING_REPORT" ||
+    projectStatus === "READY_TO_PUBLISH";
   const isDone = projectStatus === "DONE";
 
   // Estado de loading inicial

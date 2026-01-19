@@ -4,6 +4,7 @@ import uuid
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func as db_func
 
 from backend.core import database, deps, models as core_models
 from backend.services.data_validation import models, schemas, duck_manager, constants
@@ -35,6 +36,69 @@ def list_projects(
         result.append(schemas.ProjectResponse(**project_dict))
     
     return result
+
+
+# --- ROTA: HISTÓRICO DE VALIDAÇÕES (Apenas Admin) ---
+@router.get("/history", response_model=schemas.ValidationHistoryResponse)
+def get_validation_history(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Retorna o histórico de validações publicadas. Apenas para admins."""
+    # Apenas admins podem ver o histórico
+    if current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem ver o histórico")
+    
+    # Buscar projetos com status DONE
+    query = db.query(models.Project).filter(
+        models.Project.status == models.ProjectStatus.DONE
+    ).order_by(models.Project.approved_at.desc())
+    
+    # Contar total
+    total = query.count()
+    
+    # Aplicar paginação
+    offset = (page - 1) * page_size
+    projects = query.offset(offset).limit(page_size).all()
+    
+    # Construir resposta
+    items = []
+    for project in projects:
+        # Buscar relatório
+        report = db.query(models.ProjectReport).filter(
+            models.ProjectReport.project_id == project.id
+        ).first()
+        
+        item = schemas.ValidationHistoryItem(
+            project_id=project.id,
+            original_filename=project.original_filename,
+            owner_id=project.owner_id,
+            owner_username=project.owner.usuario if project.owner else "Desconhecido",
+            created_at=project.created_at,
+            published_by_id=report.published_by_id if report else None,
+            published_by_username=report.published_by.usuario if report and report.published_by else None,
+            published_at=report.published_at if report else project.approved_at,
+            total_rows=report.total_rows if report else 0,
+            parts_created=report.parts_created if report else None,
+            parts_updated=report.parts_updated if report else None,
+            brands_created=report.brands_created if report else None,
+            processing_time_seconds=report.processing_time_seconds if report else None,
+            publish_time_seconds=report.publish_time_seconds if report else None
+        )
+        items.append(item)
+    
+    total_pages = (total + page_size - 1) // page_size
+    
+    return schemas.ValidationHistoryResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages
+    )
+
 
 # --- ROTA DE UPLOAD (Essencial para criar o ficheiro primeiro) ---
 @router.post("/upload", response_model=schemas.ProjectResponse)
@@ -176,14 +240,19 @@ def delete_project(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao deletar projeto: {str(e)}")
 
-# --- ROTA: ENVIAR PARA VALIDAÇÃO (DRAFT -> PENDING_REVIEW) ---
+# --- ROTA: ENVIAR PARA VALIDAÇÃO (DRAFT -> PROCESSING_REPORT) ---
 @router.post("/{project_id}/submit", response_model=schemas.ProjectResponse)
 def submit_project(
     project_id: str,
     db: Session = Depends(database.get_db),
     current_user: core_models.User = Depends(deps.get_current_user)
 ):
-    """Envia o projeto para validação. Muda status de DRAFT para PENDING_REVIEW."""
+    """
+    Envia o projeto para validação. 
+    Muda status de DRAFT para PROCESSING_REPORT e inicia processamento em background.
+    """
+    from backend.services.data_validation.tasks import process_project_report
+    
     # Buscar projeto
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
@@ -200,9 +269,37 @@ def submit_project(
             detail=f"Projeto não pode ser enviado. Status atual: {project.status.value}"
         )
     
-    # Mudar status para PENDING_REVIEW
+    # Criar relatório inicial (se não existir)
+    report = db.query(models.ProjectReport).filter(
+        models.ProjectReport.project_id == project_id
+    ).first()
+    
+    if not report:
+        report = models.ProjectReport(
+            project_id=project_id,
+            processing_status="pending"
+        )
+        db.add(report)
+    else:
+        report.processing_status = "pending"
+        report.processing_progress = 0.0
+        report.error_message = None
+        report.error_traceback = None
+    
+    # Mudar status para PENDING_REVIEW (será alterado para PROCESSING_REPORT pela task)
     project.status = models.ProjectStatus.PENDING_REVIEW
     db.commit()
+    
+    # Disparar task Celery para processar relatório
+    try:
+        task = process_project_report.delay(project_id)
+        report.celery_task_id = task.id
+        db.commit()
+        print(f"🚀 Task Celery disparada: {task.id} para projeto {project_id}", flush=True)
+    except Exception as e:
+        print(f"⚠️ Erro ao disparar task Celery: {e}", flush=True)
+        # Continua mesmo sem Celery (para desenvolvimento)
+    
     db.refresh(project)
     
     # Retornar projeto atualizado
@@ -210,28 +307,35 @@ def submit_project(
     project_dict["owner_username"] = project.owner.usuario if project.owner else None
     return schemas.ProjectResponse(**project_dict)
 
-# --- ROTA: CANCELAR ENVIO (PENDING_REVIEW -> DRAFT) ---
+# --- ROTA: CANCELAR ENVIO (PENDING_REVIEW/PROCESSING -> DRAFT) ---
 @router.post("/{project_id}/cancel", response_model=schemas.ProjectResponse)
 def cancel_project(
     project_id: str,
     db: Session = Depends(database.get_db),
     current_user: core_models.User = Depends(deps.get_current_user)
 ):
-    """Cancela o envio do projeto. Muda status de PENDING_REVIEW para DRAFT."""
+    """Cancela o envio do projeto. Muda status para DRAFT."""
     # Buscar projeto
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
-    # Verificar se é o owner
-    if project.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Apenas o proprietário pode cancelar o envio")
+    # Verificar se é o owner ou admin
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para cancelar o envio")
     
-    # Verificar se está em PENDING_REVIEW
-    if project.status != models.ProjectStatus.PENDING_REVIEW:
+    # Verificar se pode ser cancelado (não pode cancelar DONE)
+    cancelable_statuses = [
+        models.ProjectStatus.PENDING_REVIEW,
+        models.ProjectStatus.PROCESSING_REPORT,
+        models.ProjectStatus.READY_TO_PUBLISH,
+        models.ProjectStatus.PROCESSING_ERROR
+    ]
+    
+    if project.status not in cancelable_statuses:
         raise HTTPException(
             status_code=400, 
-            detail=f"Projeto não está em análise. Status atual: {project.status.value}"
+            detail=f"Projeto não pode ser cancelado. Status atual: {project.status.value}"
         )
     
     # Mudar status de volta para DRAFT
@@ -243,6 +347,204 @@ def cancel_project(
     project_dict = schemas.ProjectResponse.model_validate(project).model_dump()
     project_dict["owner_username"] = project.owner.usuario if project.owner else None
     return schemas.ProjectResponse(**project_dict)
+
+
+# --- ROTA: OBTER PROGRESSO DO PROCESSAMENTO ---
+@router.get("/{project_id}/progress", response_model=schemas.ProjectProgressResponse)
+def get_project_progress(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Retorna o progresso do processamento do relatório."""
+    # Buscar projeto
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Buscar relatório
+    report = db.query(models.ProjectReport).filter(
+        models.ProjectReport.project_id == project_id
+    ).first()
+    
+    # Determinar se pode fazer retry
+    can_retry = project.status == models.ProjectStatus.PROCESSING_ERROR
+    
+    return schemas.ProjectProgressResponse(
+        project_id=project_id,
+        status=project.status.value,
+        processing_status=report.processing_status if report else "pending",
+        processing_progress=report.processing_progress if report else 0.0,
+        processing_step=report.processing_step if report else None,
+        error_message=report.error_message if report else None,
+        can_retry=can_retry
+    )
+
+
+# --- ROTA: RETRY DO PROCESSAMENTO (PROCESSING_ERROR -> PROCESSING_REPORT) ---
+@router.post("/{project_id}/retry", response_model=schemas.ProjectProgressResponse)
+def retry_project_processing(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Reprocessa um projeto que teve erro."""
+    from backend.services.data_validation.tasks import process_project_report
+    
+    # Buscar projeto
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar se é o owner ou admin
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para reprocessar")
+    
+    # Verificar se está em PROCESSING_ERROR
+    if project.status != models.ProjectStatus.PROCESSING_ERROR:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Apenas projetos com erro podem ser reprocessados. Status atual: {project.status.value}"
+        )
+    
+    # Resetar relatório
+    report = db.query(models.ProjectReport).filter(
+        models.ProjectReport.project_id == project_id
+    ).first()
+    
+    if report:
+        report.processing_status = "pending"
+        report.processing_progress = 0.0
+        report.processing_step = None
+        report.error_message = None
+        report.error_traceback = None
+    
+    # Mudar status
+    project.status = models.ProjectStatus.PENDING_REVIEW
+    db.commit()
+    
+    # Disparar task Celery
+    try:
+        task = process_project_report.delay(project_id)
+        if report:
+            report.celery_task_id = task.id
+            db.commit()
+        print(f"🔄 Retry: Task Celery disparada: {task.id} para projeto {project_id}", flush=True)
+    except Exception as e:
+        print(f"⚠️ Erro ao disparar task Celery: {e}", flush=True)
+    
+    return schemas.ProjectProgressResponse(
+        project_id=project_id,
+        status=project.status.value,
+        processing_status="pending",
+        processing_progress=0.0,
+        processing_step="Iniciando reprocessamento...",
+        error_message=None,
+        can_retry=False
+    )
+
+
+# --- ROTA: RECALCULAR RELATÓRIO (READY_TO_PUBLISH -> PROCESSING_REPORT) ---
+@router.post("/{project_id}/recalculate", response_model=schemas.ProjectProgressResponse)
+def recalculate_project_report(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Recalcula o relatório de um projeto pronto para publicação."""
+    from backend.services.data_validation.tasks import recalculate_project_report as recalc_task
+    
+    # Apenas admins podem recalcular
+    if current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem recalcular relatórios")
+    
+    # Buscar projeto
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar se está em READY_TO_PUBLISH
+    if project.status != models.ProjectStatus.READY_TO_PUBLISH:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Apenas projetos prontos para publicação podem ser recalculados. Status atual: {project.status.value}"
+        )
+    
+    # Mudar status
+    project.status = models.ProjectStatus.PROCESSING_REPORT
+    db.commit()
+    
+    # Disparar task Celery de recálculo
+    try:
+        task = recalc_task.delay(project_id)
+        print(f"🔄 Recalculate: Task Celery disparada: {task.id} para projeto {project_id}", flush=True)
+    except Exception as e:
+        print(f"⚠️ Erro ao disparar task Celery: {e}", flush=True)
+    
+    return schemas.ProjectProgressResponse(
+        project_id=project_id,
+        status=project.status.value,
+        processing_status="pending",
+        processing_progress=0.0,
+        processing_step="Recalculando relatório...",
+        error_message=None,
+        can_retry=False
+    )
+
+
+# --- ROTA: OBTER RELATÓRIO COMPLETO ---
+@router.get("/{project_id}/report", response_model=schemas.ProjectReportResponse)
+def get_project_report(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """Retorna o relatório completo do projeto."""
+    # Buscar projeto
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Buscar relatório
+    report = db.query(models.ProjectReport).filter(
+        models.ProjectReport.project_id == project_id
+    ).first()
+    
+    if not report:
+        raise HTTPException(status_code=404, detail="Relatório não encontrado")
+    
+    # Determinar se pode publicar
+    can_publish = (
+        project.status == models.ProjectStatus.READY_TO_PUBLISH and
+        report.processing_status == "completed" and
+        report.production_db_ready
+    )
+    
+    # Converter brands_to_create para schema
+    brands_to_create = [
+        schemas.BrandToCreateSchema(**b) if isinstance(b, dict) else b
+        for b in (report.brands_to_create or [])
+    ]
+    
+    return schemas.ProjectReportResponse(
+        project_id=project_id,
+        total_rows=report.total_rows,
+        columns_found=report.columns_found or [],
+        parts_new=report.parts_new,
+        parts_existing=report.parts_existing,
+        brands_new=report.brands_new,
+        brands_existing=report.brands_existing,
+        brands_to_create=brands_to_create,
+        processing_status=report.processing_status,
+        processing_progress=report.processing_progress,
+        processing_step=report.processing_step,
+        processing_time_seconds=report.processing_time_seconds,
+        error_message=report.error_message,
+        production_db_status=report.production_db_status,
+        production_db_ready=report.production_db_ready,
+        can_publish=can_publish
+    )
+
 
 # --- NOVA ROTA: DOWNLOAD CSV ---
 @router.get("/{project_id}/download")
@@ -745,6 +1047,119 @@ def get_statistics(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas: {str(e)}")
 
+# --- VALIDAÇÃO DE SIMILARIDADES ---
+
+@router.get("/{project_id}/similarities/diagnosis", response_model=schemas.SimilaritiesDiagnosisResponse)
+def diagnose_similarities(
+    project_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Diagnostica a coluna similarity e retorna preview paginado das linhas com problemas.
+    
+    Validações:
+    - Verifica se a coluna existe
+    - Valida formato JSON (lista de dicionários)
+    - Valida chaves obrigatórias (search_ref e brand)
+    - Valida search_ref (sem espaços nem caracteres especiais)
+    - Valida brand (deve estar em MAIÚSCULAS)
+    - Verifica se search_ref existe no projeto
+    - Verifica se brand está no mapeamento
+    - Verifica se valores NULL devem ser []
+    """
+    # Verificar se o projeto existe e pertence ao utilizador
+    print(f"DEBUG SIMILARITIES: Buscando projeto com ID: {project_id}")
+    print(f"DEBUG SIMILARITIES: Tipo do project_id: {type(project_id)}")
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    print(f"DEBUG SIMILARITIES: Projeto encontrado: {project}")
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        result = duck.diagnose_similarities(page=page, page_size=page_size)
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao diagnosticar similaridades: {str(e)}")
+
+@router.post("/{project_id}/similarities/fix-all", response_model=schemas.TreatmentFixResponse)
+def fix_all_similarities(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Aplica todas as correções na coluna similarity:
+    - Normaliza search_ref (remove espaços e caracteres especiais)
+    - Converte brands para MAIÚSCULAS
+    - Aplica mapeamento de marcas
+    - Converte NULL para []
+    """
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para alterar este projeto.")
+    
+    # Verificar se o projeto está em modo DRAFT
+    if project.status != models.ProjectStatus.DRAFT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Projeto não pode ser alterado. Status atual: {project.status.value}. Apenas projetos em DRAFT podem ser editados."
+        )
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        result = duck.fix_all_similarities()
+        
+        return {
+            "message": "Todas as correções foram aplicadas na coluna similarity",
+            "columns_affected": ["similarity"],
+            "rows_affected": result["rows_affected"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao corrigir similaridades: {str(e)}")
+
+@router.get("/{project_id}/similarities/statistics", response_model=schemas.SimilaritiesStatisticsResponse)
+def get_similarities_statistics(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Retorna estatísticas detalhadas sobre as similaridades:
+    - Total de linhas com/sem similaridades
+    - Média de similaridades por linha
+    - Top 10 search_refs mais referenciados
+    - Top 10 marcas mais referenciadas
+    - Distribuição de quantidade de similaridades
+    - Refs/brands inexistentes
+    """
+    # Verificar se o projeto existe e pertence ao utilizador
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão de acesso a este projeto.")
+    
+    try:
+        duck = duck_manager.DuckSession(project_id)
+        result = duck.get_similarities_statistics()
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular estatísticas de similaridades: {str(e)}")
+
 # --- FASE 3: MAPEAMENTO DE MARCAS ---
 
 @router.get("/{project_id}/brands/analysis", response_model=schemas.BrandAnalysisResponse)
@@ -1116,12 +1531,12 @@ def get_publish_preview(
     
     logger.info(f"🚀 [ENDPOINT] Projeto encontrado. Status: {project.status}")
     
-    # Verificar se está em status PENDING_REVIEW
-    if project.status != models.ProjectStatus.PENDING_REVIEW:
+    # Verificar se está em status READY_TO_PUBLISH
+    if project.status != models.ProjectStatus.READY_TO_PUBLISH:
         logger.warning(f"🚀 [ENDPOINT] Status inválido: {project.status.value}")
         raise HTTPException(
             status_code=400, 
-            detail=f"Projeto deve estar em status PENDING_REVIEW para publicação. Status atual: {project.status.value}"
+            detail=f"Projeto deve estar em status READY_TO_PUBLISH para publicação. Status atual: {project.status.value}"
         )
     
     logger.info(f"🚀 [ENDPOINT] Chamando publish_service.get_publish_preview()...")
@@ -1165,11 +1580,11 @@ def execute_publish(
     if not project:
         raise HTTPException(status_code=404, detail="Projeto não encontrado")
     
-    # Verificar se está em status PENDING_REVIEW
-    if project.status != models.ProjectStatus.PENDING_REVIEW:
+    # Verificar se está em status READY_TO_PUBLISH
+    if project.status != models.ProjectStatus.READY_TO_PUBLISH:
         raise HTTPException(
             status_code=400, 
-            detail=f"Projeto deve estar em status PENDING_REVIEW para publicação. Status atual: {project.status.value}"
+            detail=f"Projeto deve estar em status READY_TO_PUBLISH para publicação. Status atual: {project.status.value}"
         )
     
     try:
@@ -1189,6 +1604,22 @@ def execute_publish(
         if result.success:
             # Atualizar status do projeto para DONE
             project.status = models.ProjectStatus.DONE
+            project.approved_at = db_func.now()
+            
+            # Atualizar ProjectReport com informações de publicação
+            report = db.query(models.ProjectReport).filter(
+                models.ProjectReport.project_id == project_id
+            ).first()
+            
+            if report:
+                report.published_at = db_func.now()
+                report.published_by_id = current_user.id
+                report.parts_created = result.parts_inserted
+                report.parts_updated = result.parts_updated
+                # Calcular tempo de publicação baseado no tempo total de processamento
+                if result.execution_time_seconds:
+                    report.publish_time_seconds = result.execution_time_seconds
+            
             db.commit()
             
             # Remover arquivo DuckDB

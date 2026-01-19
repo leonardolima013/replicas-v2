@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -9,6 +9,9 @@ import {
   FileText,
   BarChart3,
   Upload,
+  RefreshCw,
+  CheckCircle,
+  Clock,
 } from "lucide-react";
 import * as validationService from "../../services/validationService";
 import QualityReportTab from "./components/QualityReportTab";
@@ -19,6 +22,11 @@ export default function AdminValidationReview() {
   const navigate = useNavigate();
 
   const [project, setProject] = useState<validationService.Project | null>(
+    null
+  );
+  const [progress, setProgress] =
+    useState<validationService.ProjectProgress | null>(null);
+  const [report, setReport] = useState<validationService.ProjectReport | null>(
     null
   );
   const [previewData, setPreviewData] =
@@ -38,6 +46,37 @@ export default function AdminValidationReview() {
       fetchProjectData();
     }
   }, [projectId, currentPage]);
+
+  // Polling para atualizar progresso quando está processando
+  useEffect(() => {
+    if (!project || project.status !== "PROCESSING_REPORT") return;
+
+    const interval = setInterval(() => {
+      fetchProgress();
+    }, 3000); // Poll a cada 3 segundos
+
+    return () => clearInterval(interval);
+  }, [project?.status]);
+
+  const fetchProgress = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const progressData = await validationService.getProjectProgress(
+        projectId
+      );
+      setProgress(progressData);
+
+      // Se terminou de processar, buscar dados atualizados
+      if (
+        progressData.status === "READY_TO_PUBLISH" ||
+        progressData.status === "PROCESSING_ERROR"
+      ) {
+        fetchProjectData();
+      }
+    } catch (err) {
+      console.error("Erro ao buscar progresso:", err);
+    }
+  }, [projectId]);
 
   const fetchProjectData = async () => {
     if (!projectId) return;
@@ -60,12 +99,41 @@ export default function AdminValidationReview() {
         throw new Error("Projeto não encontrado");
       }
 
-      if (currentProject.status !== "PENDING") {
-        throw new Error("Este projeto não está pendente de aprovação");
+      // Aceitar projetos em qualquer status de revisão
+      const allowedStatuses = [
+        "PENDING_REVIEW",
+        "PROCESSING_REPORT",
+        "READY_TO_PUBLISH",
+        "PROCESSING_ERROR",
+      ];
+      if (!allowedStatuses.includes(currentProject.status)) {
+        throw new Error(
+          `Este projeto não está em processo de revisão (status: ${currentProject.status})`
+        );
       }
 
       setProject(currentProject);
       setPreviewData(preview);
+
+      // Buscar progresso se estiver processando
+      if (currentProject.status === "PROCESSING_REPORT") {
+        const progressData = await validationService.getProjectProgress(
+          projectId
+        );
+        setProgress(progressData);
+      }
+
+      // Buscar relatório se estiver pronto para publicar
+      if (currentProject.status === "READY_TO_PUBLISH") {
+        try {
+          const reportData = await validationService.getProjectReport(
+            projectId
+          );
+          setReport(reportData);
+        } catch (err) {
+          console.error("Erro ao buscar relatório:", err);
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Erro ao carregar dados do projeto");
     } finally {
@@ -134,6 +202,44 @@ export default function AdminValidationReview() {
     }
   };
 
+  const handleRetry = async () => {
+    if (!projectId) return;
+
+    setActionLoading(true);
+    try {
+      await validationService.retryProjectProcessing(projectId);
+      // Atualizar o projeto para mostrar que está processando novamente
+      await fetchProjectData();
+    } catch (err: any) {
+      alert(err.message || "Erro ao reprocessar projeto");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRecalculate = async () => {
+    if (!projectId) return;
+
+    if (
+      !confirm(
+        "Tem certeza que deseja recalcular o relatório? O processamento será reiniciado."
+      )
+    ) {
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      await validationService.recalculateProjectReport(projectId);
+      // Atualizar o projeto para mostrar que está processando
+      await fetchProjectData();
+    } catch (err: any) {
+      alert(err.message || "Erro ao recalcular relatório");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("pt-BR", {
@@ -144,6 +250,53 @@ export default function AdminValidationReview() {
       minute: "2-digit",
     });
   };
+
+  const getStatusInfo = () => {
+    if (!project) return { label: "", className: "", icon: null };
+
+    const statusMap: Record<
+      string,
+      { label: string; className: string; icon: React.ReactNode }
+    > = {
+      PENDING_REVIEW: {
+        label: "Aguardando Processamento",
+        className:
+          "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300",
+        icon: <Clock className="w-4 h-4" />,
+      },
+      PROCESSING_REPORT: {
+        label: "Processando Relatório",
+        className:
+          "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300",
+        icon: <Loader2 className="w-4 h-4 animate-spin" />,
+      },
+      READY_TO_PUBLISH: {
+        label: "Pronto para Publicar",
+        className:
+          "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
+        icon: <CheckCircle className="w-4 h-4" />,
+      },
+      PROCESSING_ERROR: {
+        label: "Erro no Processamento",
+        className:
+          "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
+        icon: <XCircle className="w-4 h-4" />,
+      },
+    };
+
+    return (
+      statusMap[project.status] || {
+        label: project.status,
+        className:
+          "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300",
+        icon: null,
+      }
+    );
+  };
+
+  const isProcessing = project?.status === "PROCESSING_REPORT";
+  const isReady = project?.status === "READY_TO_PUBLISH";
+  const hasError = project?.status === "PROCESSING_ERROR";
 
   const totalPages = previewData
     ? Math.ceil(previewData.total_rows / pageSize)
@@ -213,6 +366,128 @@ export default function AdminValidationReview() {
       {/* Preview Content */}
       {!loading && !error && project && previewData && (
         <>
+          {/* Processing Progress Banner */}
+          {isProcessing && progress && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-card p-6 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Loader2 className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-spin" />
+                <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200">
+                  Processando Relatório...
+                </h3>
+              </div>
+              <div className="mb-2">
+                <div className="flex justify-between text-sm text-blue-700 dark:text-blue-300 mb-1">
+                  <span>{progress.processing_step || "Iniciando..."}</span>
+                  <span>{progress.processing_progress}%</span>
+                </div>
+                <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-3">
+                  <div
+                    className="bg-blue-600 dark:bg-blue-400 h-3 rounded-full transition-all duration-500"
+                    style={{ width: `${progress.processing_progress}%` }}
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-blue-600 dark:text-blue-400">
+                Aguarde enquanto analisamos os dados do projeto...
+              </p>
+            </div>
+          )}
+
+          {/* Error Banner */}
+          {hasError && progress && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-card p-6 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <XCircle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                <h3 className="text-lg font-semibold text-red-800 dark:text-red-200">
+                  Erro no Processamento
+                </h3>
+              </div>
+              <p className="text-sm text-red-600 dark:text-red-400 mb-4">
+                {progress.error_message ||
+                  "Ocorreu um erro durante o processamento do relatório."}
+              </p>
+              <button
+                onClick={handleRetry}
+                disabled={actionLoading}
+                className="btn-secondary flex items-center gap-2"
+              >
+                {actionLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                Tentar Novamente
+              </button>
+            </div>
+          )}
+
+          {/* Report Summary Banner when Ready */}
+          {isReady && report && (
+            <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-card p-6 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                <h3 className="text-lg font-semibold text-green-800 dark:text-green-200">
+                  Relatório Processado com Sucesso
+                </h3>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Total de Linhas
+                  </p>
+                  <p className="text-xl font-bold text-green-800 dark:text-green-200">
+                    {report.total_rows.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Peças Novas
+                  </p>
+                  <p className="text-xl font-bold text-green-800 dark:text-green-200">
+                    {report.parts_new.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Peças Existentes
+                  </p>
+                  <p className="text-xl font-bold text-green-800 dark:text-green-200">
+                    {report.parts_existing.toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Marcas Novas
+                  </p>
+                  <p className="text-xl font-bold text-green-800 dark:text-green-200">
+                    {report.brands_new}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  onClick={handleRecalculate}
+                  disabled={actionLoading}
+                  className="btn-secondary text-sm flex items-center gap-2"
+                >
+                  {actionLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Recalcular
+                </button>
+                <button
+                  onClick={() => setActiveTab("publish")}
+                  className="btn-primary bg-green-600 hover:bg-green-700 text-sm flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Ir para Publicação
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Tabs Navigation */}
           <div className="bg-white dark:bg-gray-900 rounded-t-card shadow-soft border border-gray-100 dark:border-gray-800 border-b-0">
             <div className="flex border-b border-gray-200 dark:border-gray-800">
@@ -232,6 +507,7 @@ export default function AdminValidationReview() {
               </button>
               <button
                 onClick={() => setActiveTab("quality")}
+                disabled={isProcessing}
                 className={`
                   flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all
                   border-b-2 ${
@@ -239,6 +515,7 @@ export default function AdminValidationReview() {
                       ? "border-sky-600 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/20"
                       : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   }
+                  ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}
                 `}
               >
                 <BarChart3 className="w-5 h-5" />
@@ -246,6 +523,7 @@ export default function AdminValidationReview() {
               </button>
               <button
                 onClick={() => setActiveTab("publish")}
+                disabled={!isReady}
                 className={`
                   flex items-center gap-2 px-6 py-4 font-medium text-sm transition-all
                   border-b-2 ${
@@ -253,10 +531,14 @@ export default function AdminValidationReview() {
                       ? "border-green-600 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
                       : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   }
+                  ${!isReady ? "opacity-50 cursor-not-allowed" : ""}
                 `}
               >
                 <Upload className="w-5 h-5" />
                 Publicar na Hubbi
+                {!isReady && (
+                  <span className="text-xs text-gray-400">(Aguarde)</span>
+                )}
               </button>
             </div>
           </div>
@@ -287,9 +569,17 @@ export default function AdminValidationReview() {
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                       Status
                     </p>
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
-                      Aguardando Aprovação
-                    </span>
+                    {(() => {
+                      const statusInfo = getStatusInfo();
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${statusInfo.className}`}
+                        >
+                          {statusInfo.icon}
+                          {statusInfo.label}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -386,9 +676,24 @@ export default function AdminValidationReview() {
                   </button>
 
                   <div className="flex items-center gap-3">
+                    {hasError && (
+                      <button
+                        onClick={handleRetry}
+                        disabled={actionLoading}
+                        className="btn-secondary flex items-center gap-2"
+                      >
+                        {actionLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-5 h-5" />
+                        )}
+                        Reprocessar
+                      </button>
+                    )}
+
                     <button
                       onClick={handleReject}
-                      disabled={actionLoading}
+                      disabled={actionLoading || isProcessing}
                       className="btn-secondary bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {actionLoading ? (
@@ -401,10 +706,15 @@ export default function AdminValidationReview() {
 
                     <button
                       onClick={() => setActiveTab("publish")}
-                      className="btn-primary bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                      disabled={!isReady}
+                      className="btn-primary bg-green-600 hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Upload className="w-5 h-5" />
-                      Ir para Publicação
+                      {isReady
+                        ? "Ir para Publicação"
+                        : isProcessing
+                        ? "Processando..."
+                        : "Aguardando"}
                     </button>
                   </div>
                 </div>
@@ -433,7 +743,7 @@ export default function AdminValidationReview() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={handleReject}
-                      disabled={actionLoading}
+                      disabled={actionLoading || isProcessing}
                       className="btn-secondary bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
                       {actionLoading ? (
@@ -446,10 +756,15 @@ export default function AdminValidationReview() {
 
                     <button
                       onClick={() => setActiveTab("publish")}
-                      className="btn-primary bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                      disabled={!isReady}
+                      className="btn-primary bg-green-600 hover:bg-green-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Upload className="w-5 h-5" />
-                      Ir para Publicação
+                      {isReady
+                        ? "Ir para Publicação"
+                        : isProcessing
+                        ? "Processando..."
+                        : "Aguardando"}
                     </button>
                   </div>
                 </div>

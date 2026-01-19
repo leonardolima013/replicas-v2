@@ -148,6 +148,53 @@ class DuplicatesQuality(BaseModel):
     found: int
     removed: int
 
+# --- SCHEMAS PARA VALIDAÇÃO DE SIMILARIDADES ---
+
+class SimilarityIssue(BaseModel):
+    row_number: int
+    search_ref: Optional[str]
+    brand: Optional[str]
+    similarity_value: Optional[Any]
+    issues: List[str]  # Lista de problemas encontrados
+
+class SimilaritiesDiagnosisResponse(BaseModel):
+    column_exists: bool
+    format_issues: int              # Problemas de formato JSON
+    search_ref_issues: int          # search_ref com espaços/caracteres especiais
+    brand_issues: int               # brand em minúsculas
+    invalid_refs: int               # search_ref não existe no projeto
+    invalid_brands: int             # brand não está no mapeamento
+    empty_list_issues: int          # Valores NULL ao invés de []
+    total_issues: int               # Total de problemas
+    preview: List[SimilarityIssue]  # Preview paginado
+    page: int
+    page_size: int
+    total_pages: int
+
+class TopSearchRef(BaseModel):
+    search_ref: str
+    count: int
+
+class TopBrand(BaseModel):
+    brand: str
+    count: int
+
+class SimilarityDistribution(BaseModel):
+    similarity_count: int
+    row_count: int
+
+class SimilaritiesStatisticsResponse(BaseModel):
+    total_rows: int
+    rows_with_similarities: int
+    percentage_with_similarities: float
+    total_similarities: int
+    avg_similarities_per_row: float
+    top_search_refs: List[TopSearchRef]
+    top_brands: List[TopBrand]
+    distribution: List[SimilarityDistribution]
+    invalid_search_refs: List[str]  # search_refs que não existem no projeto
+    invalid_brands: List[str]       # brands que não estão no mapeamento
+
 class StatisticsQuality(BaseModel):
     weight_correlation: Optional[float]
     physical_violations: int
@@ -163,3 +210,109 @@ class QualityReportResponse(BaseModel):
     statistics: StatisticsQuality
     warnings: List[str]
     blockers: List[str]
+
+
+# --- SCHEMAS PARA PROGRESSO DE PROCESSAMENTO ---
+
+class BrandToCreateSchema(BaseModel):
+    brand_name: str
+    occurrences: int
+
+class ProjectReportResponse(BaseModel):
+    """Resposta do relatório de um projeto"""
+    project_id: str
+    
+    # Métricas do dataset
+    total_rows: int = 0
+    columns_found: List[str] = []
+    
+    # Métricas de peças
+    parts_new: int = 0
+    parts_existing: int = 0
+    
+    # Métricas de marcas
+    brands_new: int = 0
+    brands_existing: int = 0
+    brands_to_create: List[BrandToCreateSchema] = []
+    
+    # Status do processamento
+    processing_status: str = "pending"  # pending, running, completed, error
+    processing_progress: float = 0.0
+    processing_step: Optional[str] = None
+    processing_time_seconds: Optional[float] = None
+    
+    # Erro (se houver)
+    error_message: Optional[str] = None
+    
+    # Status do banco de produção
+    production_db_status: str = "unknown"
+    production_db_ready: bool = False
+    
+    # Pode publicar?
+    can_publish: bool = False
+    
+    class Config:
+        from_attributes = True
+
+
+class ProjectProgressResponse(BaseModel):
+    """Resposta simples do progresso de processamento"""
+    project_id: str
+    status: str  # project status
+    processing_status: str  # pending, running, completed, error
+    processing_progress: float
+    processing_step: Optional[str] = None
+    error_message: Optional[str] = None
+    can_retry: bool = False
+
+
+class ProjectWithReportResponse(BaseModel):
+    """Resposta completa do projeto com relatório"""
+    id: str
+    original_filename: str
+    status: str
+    created_at: datetime
+    owner_username: Optional[str] = None
+    
+    # Dados de aprovação
+    approved_by_username: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    
+    # Relatório (se existir)
+    report: Optional[ProjectReportResponse] = None
+    
+    class Config:
+        from_attributes = True
+
+
+class ValidationHistoryItem(BaseModel):
+    """Item do histórico de validações"""
+    project_id: str
+    original_filename: str
+    
+    # Quem enviou
+    owner_id: int
+    owner_username: str
+    created_at: datetime
+    
+    # Quem aprovou/publicou
+    published_by_id: Optional[int] = None
+    published_by_username: Optional[str] = None
+    published_at: Optional[datetime] = None
+    
+    # Métricas
+    total_rows: int = 0
+    parts_created: Optional[int] = None
+    parts_updated: Optional[int] = None
+    brands_created: Optional[int] = None
+    processing_time_seconds: Optional[float] = None
+    publish_time_seconds: Optional[float] = None
+
+
+class ValidationHistoryResponse(BaseModel):
+    """Resposta do histórico de validações"""
+    items: List[ValidationHistoryItem]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int

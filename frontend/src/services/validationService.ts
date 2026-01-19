@@ -7,9 +7,67 @@ export interface Project {
   id: string;
   original_filename: string;
   created_at: string;
-  status: "DRAFT" | "PENDING" | "DONE";
+  status:
+    | "DRAFT"
+    | "PENDING_REVIEW"
+    | "PROCESSING_REPORT"
+    | "READY_TO_PUBLISH"
+    | "PROCESSING_ERROR"
+    | "DONE";
   owner_username?: string;
   total_rows?: number;
+}
+
+// Interface para progresso do processamento
+export interface ProjectProgress {
+  project_id: string;
+  status: string;
+  processing_status: string | null;
+  processing_progress: number;
+  processing_step: string | null;
+  error_message: string | null;
+}
+
+// Interface para relatório do projeto
+export interface ProjectReport {
+  project_id: string;
+  total_rows: number;
+  columns_found: number;
+  parts_new: number;
+  parts_existing: number;
+  brands_new: number;
+  brands_existing: number;
+  brands_to_create: string[];
+  processing_time_seconds: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Interface para item do histórico de validações
+export interface ValidationHistoryItem {
+  project_id: string;
+  original_filename: string;
+  owner_id: number;
+  owner_username: string;
+  created_at: string;
+  published_by_id: number | null;
+  published_by_username: string | null;
+  published_at: string | null;
+  total_rows: number;
+  parts_created: number | null;
+  parts_updated: number | null;
+  brands_created: number | null;
+  processing_time_seconds: number | null;
+  publish_time_seconds: number | null;
+}
+
+// Interface para resposta do histórico de validações
+export interface ValidationHistoryResponse {
+  items: ValidationHistoryItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 // Interface para resposta de listagem de projetos
@@ -139,6 +197,43 @@ export interface BrandAnalysisResponse {
 export interface BrandApplicationResponse {
   message: string;
   rows_affected: number;
+}
+
+// Interfaces para Similaridades
+export interface SimilarityIssue {
+  row_number: number;
+  search_ref: string | null;
+  brand: string | null;
+  similarity_value: any;
+  issues: string[];
+}
+
+export interface SimilaritiesDiagnosisResponse {
+  column_exists: boolean;
+  format_issues: number;
+  search_ref_issues: number;
+  brand_issues: number;
+  invalid_refs: number;
+  invalid_brands: number;
+  empty_list_issues: number;
+  total_issues: number;
+  preview: SimilarityIssue[];
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface SimilaritiesStatisticsResponse {
+  total_rows: number;
+  rows_with_similarities: number;
+  percentage_with_similarities: number;
+  total_similarities: number;
+  avg_similarities_per_row: number;
+  top_search_refs: Array<{ search_ref: string; count: number }>;
+  top_brands: Array<{ brand: string; count: number }>;
+  distribution: Array<{ similarity_count: number; row_count: number }>;
+  invalid_search_refs: string[];
+  invalid_brands: string[];
 }
 
 // Interfaces para Relatório de Qualidade
@@ -1016,11 +1111,242 @@ export const executePublish = async (
     if (error.response?.status === 400) {
       throw new Error(
         error.response?.data?.detail ||
-          "Projeto deve estar em status PENDING_REVIEW para publicação."
+          "Projeto deve estar em status READY_TO_PUBLISH para publicação."
       );
     }
     throw new Error(
       error.response?.data?.detail || "Erro ao executar publicação."
+    );
+  }
+};
+
+// ==================== FUNÇÕES DE PROGRESSO E HISTÓRICO ====================
+
+/**
+ * Busca o progresso do processamento de um projeto
+ * @param projectId - ID do projeto
+ */
+export const getProjectProgress = async (
+  projectId: string
+): Promise<ProjectProgress> => {
+  try {
+    const response = await api.get<ProjectProgress>(
+      `/validation/${projectId}/progress`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao buscar progresso do projeto."
+    );
+  }
+};
+
+/**
+ * Reprocessa um projeto que falhou
+ * @param projectId - ID do projeto
+ */
+export const retryProjectProcessing = async (
+  projectId: string
+): Promise<{ message: string }> => {
+  try {
+    const response = await api.post<{ message: string }>(
+      `/validation/${projectId}/retry`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail ||
+          "Projeto deve estar em status de erro para reprocessar."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao reprocessar projeto."
+    );
+  }
+};
+
+/**
+ * Recalcula o relatório de um projeto (apenas admin)
+ * @param projectId - ID do projeto
+ */
+export const recalculateProjectReport = async (
+  projectId: string
+): Promise<{ message: string }> => {
+  try {
+    const response = await api.post<{ message: string }>(
+      `/validation/${projectId}/recalculate`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Apenas administradores podem recalcular relatórios.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail ||
+          "Projeto deve estar em status READY_TO_PUBLISH para recalcular."
+      );
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao recalcular relatório."
+    );
+  }
+};
+
+/**
+ * Busca o relatório de um projeto
+ * @param projectId - ID do projeto
+ */
+export const getProjectReport = async (
+  projectId: string
+): Promise<ProjectReport> => {
+  try {
+    const response = await api.get<ProjectReport>(
+      `/validation/${projectId}/report`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto ou relatório não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao buscar relatório do projeto."
+    );
+  }
+};
+
+/**
+ * Busca o histórico de validações publicadas (apenas admin)
+ * @param page - Número da página (começa em 1)
+ * @param pageSize - Tamanho da página (padrão: 20)
+ */
+export const getValidationHistory = async (
+  page: number = 1,
+  pageSize: number = 20
+): Promise<ValidationHistoryResponse> => {
+  try {
+    const response = await api.get<ValidationHistoryResponse>(
+      `/validation/history`,
+      {
+        params: { page, page_size: pageSize },
+      }
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Apenas administradores podem acessar o histórico.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao buscar histórico de validações."
+    );
+  }
+};
+
+/**
+ * Busca diagnóstico de similaridades de um projeto
+ * @param projectId - ID do projeto
+ * @param page - Número da página (começa em 1)
+ * @param pageSize - Tamanho da página (padrão: 20)
+ */
+export const getSimilaritiesDiagnosis = async (
+  projectId: string,
+  page: number = 1,
+  pageSize: number = 20
+): Promise<SimilaritiesDiagnosisResponse> => {
+  try {
+    const response = await api.get<SimilaritiesDiagnosisResponse>(
+      `/validation/${projectId}/similarities/diagnosis`,
+      {
+        params: { page, page_size: pageSize },
+      }
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail ||
+        "Erro ao buscar diagnóstico de similaridades."
+    );
+  }
+};
+
+/**
+ * Aplica todas as correções na coluna similarity
+ * @param projectId - ID do projeto
+ */
+export const fixAllSimilarities = async (
+  projectId: string
+): Promise<FixResponse> => {
+  try {
+    const response = await api.post<FixResponse>(
+      `/validation/${projectId}/similarities/fix-all`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao corrigir similaridades."
+    );
+  }
+};
+
+/**
+ * Busca estatísticas de similaridades de um projeto
+ * @param projectId - ID do projeto
+ */
+export const getSimilaritiesStatistics = async (
+  projectId: string
+): Promise<SimilaritiesStatisticsResponse> => {
+  try {
+    const response = await api.get<SimilaritiesStatisticsResponse>(
+      `/validation/${projectId}/similarities/statistics`
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail ||
+        "Erro ao buscar estatísticas de similaridades."
     );
   }
 };

@@ -22,6 +22,20 @@ services:
       - 8.8.8.8
       - 8.8.4.4
 
+  redis:
+    image: redis:7-alpine
+    container_name: replicas-v2_redis
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   app:
     build:
       context: .
@@ -31,6 +45,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend:/app/backend
+      - ./temp_data:/app/temp_data
     environment:
       # Banco de metadados local (validação) - usando porta mapeada pois estamos em host mode
       DB_HOST: localhost
@@ -44,12 +59,59 @@ services:
       PROD_DB_NAME: ${PROD_DB_NAME:-hubbi_prod}
       PROD_DB_USER: ${PROD_DB_USER:-postgres}
       PROD_DB_PASSWORD: ${PROD_DB_PASSWORD:-postgres}
+      # Redis/Celery
+      REDIS_URL: redis://localhost:6380/0
+      CELERY_BROKER_URL: redis://localhost:6380/0
+      CELERY_RESULT_BACKEND: redis://localhost:6380/0
+      # Configuração de processamento
+      MAX_CONCURRENT_PROCESSING: "1"
       # JWT e Auth
       JWT_SECRET_KEY: "your-super-secret-key-change-in-production"
       ALGORITHM: "HS256"
       ACCESS_TOKEN_EXPIRE_MINUTES: "300"
     depends_on:
       db_metadados:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: replicas-v2_celery
+    network_mode: "host"
+    command: celery -A backend.celery_app worker --loglevel=info --concurrency=1
+    volumes:
+      - ./backend:/app/backend
+      - ./temp_data:/app/temp_data
+      - ./mapeamento-marcas-invertido.json:/app/mapeamento-marcas-invertido.json
+    environment:
+      # Banco de metadados local
+      DB_HOST: localhost
+      DB_PORT: "5434"
+      POSTGRES_USER: pgroot
+      POSTGRES_PASSWORD: pg@root
+      POSTGRES_DB: replicas_metadados_db
+      # Banco de produção
+      PROD_DB_HOST: ${PROD_DB_HOST:-localhost}
+      PROD_DB_PORT: ${PROD_DB_PORT:-5432}
+      PROD_DB_NAME: ${PROD_DB_NAME:-hubbi_prod}
+      PROD_DB_USER: ${PROD_DB_USER:-postgres}
+      PROD_DB_PASSWORD: ${PROD_DB_PASSWORD:-postgres}
+      # Redis/Celery
+      REDIS_URL: redis://localhost:6380/0
+      CELERY_BROKER_URL: redis://localhost:6380/0
+      CELERY_RESULT_BACKEND: redis://localhost:6380/0
+      # Configuração de processamento
+      MAX_CONCURRENT_PROCESSING: "1"
+    depends_on:
+      db_metadados:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     dns:
       - 8.8.8.8
@@ -73,3 +135,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

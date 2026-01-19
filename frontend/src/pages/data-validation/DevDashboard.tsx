@@ -45,27 +45,49 @@ export default function DevDashboard() {
   const getStatusBadge = (status: string) => {
     if (status === "DRAFT") {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300">
           Em Andamento
         </span>
       );
     }
-    if (status === "PENDING") {
+    if (status === "PENDING_REVIEW") {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          Aguardando Aprovação
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300">
+          Aguardando Análise
+        </span>
+      );
+    }
+    if (status === "PROCESSING_REPORT") {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 flex items-center gap-1">
+          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+          Processando
+        </span>
+      );
+    }
+    if (status === "READY_TO_PUBLISH") {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
+          Pronto para Publicar
+        </span>
+      );
+    }
+    if (status === "PROCESSING_ERROR") {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300">
+          Erro no Processamento
         </span>
       );
     }
     if (status === "DONE") {
       return (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
           Publicado
         </span>
       );
     }
     return (
-      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
         {status}
       </span>
     );

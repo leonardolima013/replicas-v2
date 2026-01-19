@@ -8,6 +8,7 @@ import ReplicasDashboard from "./pages/replicas/ReplicasDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminValidationDashboard from "./pages/admin/AdminValidationDashboard";
 import AdminValidationReview from "./pages/admin/AdminValidationReview";
+import AdminValidationHistory from "./pages/admin/AdminValidationHistory";
 import AdminReplicasDashboard from "./pages/admin/AdminReplicasDashboard";
 import MainLayout from "./components/MainLayout";
 import "./App.css";
@@ -36,6 +37,10 @@ function App() {
           <Route
             path="/admin/validation"
             element={<AdminValidationDashboard />}
+          />
+          <Route
+            path="/admin/validation/history"
+            element={<AdminValidationHistory />}
           />
           <Route
             path="/admin/validation/:projectId"

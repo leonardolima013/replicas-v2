@@ -11,3 +11,5 @@ jose
 docker
 duckdb
 pandas
+celery[redis]
+redis

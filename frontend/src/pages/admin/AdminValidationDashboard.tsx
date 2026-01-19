@@ -7,6 +7,9 @@ import {
   AlertCircle,
   ArrowLeft,
   Download,
+  Clock,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import * as validationService from "../../services/validationService";
 
@@ -25,11 +28,15 @@ export default function AdminValidationDashboard() {
       setLoading(true);
       setError(null);
       const response = await validationService.getProjects();
-      // Filtrar apenas projetos com status PENDING
-      const pendingProjects = response.projects.filter(
-        (p) => p.status === "PENDING"
+      // Filtrar projetos com status que requerem ação do admin
+      const actionableProjects = response.projects.filter(
+        (p) =>
+          p.status === "PENDING_REVIEW" ||
+          p.status === "PROCESSING_REPORT" ||
+          p.status === "READY_TO_PUBLISH" ||
+          p.status === "PROCESSING_ERROR"
       );
-      setProjects(pendingProjects);
+      setProjects(actionableProjects);
     } catch (err: any) {
       setError(err.message || "Erro ao carregar projetos");
     } finally {
@@ -76,6 +83,54 @@ export default function AdminValidationDashboard() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<
+      string,
+      { label: string; className: string; icon: React.ReactNode }
+    > = {
+      PENDING_REVIEW: {
+        label: "Aguardando",
+        className:
+          "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300",
+        icon: <Clock className="w-3 h-3" />,
+      },
+      PROCESSING_REPORT: {
+        label: "Processando",
+        className:
+          "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300",
+        icon: <Loader2 className="w-3 h-3 animate-spin" />,
+      },
+      READY_TO_PUBLISH: {
+        label: "Pronto",
+        className:
+          "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300",
+        icon: <CheckCircle className="w-3 h-3" />,
+      },
+      PROCESSING_ERROR: {
+        label: "Erro",
+        className:
+          "bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300",
+        icon: <XCircle className="w-3 h-3" />,
+      },
+    };
+
+    const statusInfo = statusMap[status] || {
+      label: status,
+      className:
+        "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300",
+      icon: null,
+    };
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}
+      >
+        {statusInfo.icon}
+        {statusInfo.label}
+      </span>
+    );
   };
 
   return (
@@ -162,6 +217,9 @@ export default function AdminValidationDashboard() {
                     Nome do Arquivo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Proprietário
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -187,6 +245,9 @@ export default function AdminValidationDashboard() {
                           {project.total_rows.toLocaleString()} linhas
                         </div>
                       )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(project.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-600 dark:text-gray-300">

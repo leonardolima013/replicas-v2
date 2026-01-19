@@ -461,14 +461,14 @@ class PartRepository:
         finally:
             cursor.close()
     
-    def bulk_insert_part_activities(self, part_ids: List[int], author_id: int, current_owner_id: int) -> int:
+    def bulk_insert_part_activities(self, part_ids: List[int], author_id: int, current_owner_id: Optional[int]) -> int:
         """
         Registra activities de CREATION para peças inseridas
         
         Args:
             part_ids: Lista de IDs das peças inseridas
             author_id: ID do usuário autor
-            current_owner_id: ID do manufacturer fornecedor
+            current_owner_id: ID do manufacturer fornecedor (opcional, pode ser None)
         
         Returns:
             Quantidade de activities criadas
@@ -503,14 +503,14 @@ class PartRepository:
         finally:
             cursor.close()
     
-    def bulk_insert_update_activities(self, activities_data: List[Dict], author_id: int, current_owner_id: int) -> int:
+    def bulk_insert_update_activities(self, activities_data: List[Dict], author_id: int, current_owner_id: Optional[int]) -> int:
         """
         Registra activities de UPDATE
         
         Args:
             activities_data: Lista de dicts com {part_id, attribute, previous_value, current_value}
             author_id: ID do usuário autor
-            current_owner_id: ID do manufacturer fornecedor
+            current_owner_id: ID do manufacturer fornecedor (opcional, pode ser None)
         
         Returns:
             Quantidade de activities criadas
@@ -674,7 +674,7 @@ class PublishPipeline:
         self,
         conn: psycopg2.extensions.connection,
         author_id: int,
-        current_owner_id: int,
+        current_owner_id: Optional[int],
         update_config: UpdateFieldConfig
     ):
         self.conn = conn
@@ -682,7 +682,7 @@ class PublishPipeline:
         self.part_repo = PartRepository(conn)
         self.similarity_repo = SimilarityRepository(conn)
         self.author_id = author_id
-        self.current_owner_id = current_owner_id
+        self.current_owner_id = current_owner_id  # Pode ser None
         self.update_config = update_config
     
     def execute(self, project_id: str) -> IngestionReport:
@@ -991,21 +991,33 @@ class PublishPipeline:
                 else:
                     continue
                 
-                if not similarity_list:
+                # IMPORTANTE: Listas vazias devem ser ignoradas para não criar grupos de 1 peça
+                if not similarity_list or len(similarity_list) == 0:
+                    logger.debug(f"Pulando peça {main_ref}/{main_brand} - lista de similaridades vazia")
                     continue
                 
-                # Coletar refs
-                all_refs = [(main_ref, main_brand)]
+                # Coletar refs das peças similares (exceto a principal por enquanto)
+                similar_refs = []
                 for sim in similarity_list:
                     if isinstance(sim, dict) and 'search_ref' in sim and 'brand' in sim:
                         sim_ref = str(sim['search_ref']).strip().upper()
                         sim_brand = str(sim['brand']).strip().upper()
-                        all_refs.append((sim_ref, sim_brand))
+                        similar_refs.append((sim_ref, sim_brand))
                 
-                # Buscar info das peças
+                # Se após processar a lista não temos nenhuma similar válida, pular
+                if not similar_refs or len(similar_refs) == 0:
+                    logger.debug(f"Pulando peça {main_ref}/{main_brand} - nenhuma similaridade válida após parsing")
+                    continue
+                
+                # Agora sim, adicionar a peça principal junto com as similares
+                all_refs = [(main_ref, main_brand)] + similar_refs
+                
+                # Buscar info das peças no banco
                 parts_info = self.similarity_repo.fetch_parts_with_similarity(all_refs)
                 
-                if not parts_info:
+                # Verificar se pelo menos 2 peças existem no banco (grupo mínimo)
+                if not parts_info or len(parts_info) < 2:
+                    logger.debug(f"Pulando peça {main_ref}/{main_brand} - menos de 2 peças encontradas no banco")
                     continue
                 
                 part_ids = [info[0] for info in parts_info.values()]
@@ -1049,7 +1061,10 @@ class PublishPipeline:
 
 def get_publish_preview(project_id: str) -> PublishPreviewResponse:
     """
-    Gera preview da publicação sem executar
+    Retorna preview da publicação usando dados já processados do ProjectReport.
+    
+    Esta função NÃO recalcula os dados - apenas lê o que já foi processado
+    pela task Celery process_project_report.
     
     Args:
         project_id: ID do projeto no DuckDB
@@ -1058,28 +1073,28 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
         PublishPreviewResponse com métricas e validações
     """
     import time
+    from backend.core.database import get_db
+    from backend.services.data_validation import models
+    
     start_total = time.time()
     
     warnings = []
     blockers = []
     duck_conn = None
     
-    logger.info(f"📊 [PREVIEW] Iniciando preview para projeto: {project_id}")
+    logger.info(f"📊 [PREVIEW] Recuperando dados do relatório processado para projeto: {project_id}")
     
     try:
-        # ETAPA 1: Testar conexão com produção
-        step_start = time.time()
-        logger.info("📊 [PREVIEW] ETAPA 1: Testando conexão com banco de produção...")
+        # ETAPA 1: Buscar ProjectReport que já foi processado pelo Celery
+        db = next(get_db())
         
-        from backend.services.data_validation.production_db import test_production_connection
-        db_status = test_production_connection()
+        report = db.query(models.ProjectReport).filter(
+            models.ProjectReport.project_id == project_id
+        ).first()
         
-        logger.info(f"📊 [PREVIEW] ETAPA 1 concluída em {time.time() - step_start:.2f}s - Status: {db_status['status']}")
-        
-        if db_status['status'] != 'connected':
-            blockers.append(f"Não foi possível conectar ao banco de produção: {db_status.get('error', 'Erro desconhecido')}")
-            logger.warning(f"📊 [PREVIEW] Conexão falhou: {db_status.get('error')}")
-            
+        if not report:
+            logger.warning(f"📊 [PREVIEW] Relatório não encontrado para projeto: {project_id}")
+            blockers.append("Relatório não foi processado ainda. Aguarde o processamento completo.")
             return PublishPreviewResponse(
                 project_id=project_id,
                 total_rows=0,
@@ -1088,144 +1103,93 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
                 brands_existing=0,
                 brands_to_create=0,
                 brands_to_create_list=[],
-                production_db_status=db_status['status'],
+                production_db_status='unknown',
                 warnings=warnings,
                 blockers=blockers,
                 can_publish=False
             )
         
+        if report.processing_status != 'completed':
+            logger.warning(f"📊 [PREVIEW] Relatório ainda em processamento: {report.processing_status}")
+            blockers.append(f"Relatório ainda sendo processado. Status: {report.processing_status}")
+            return PublishPreviewResponse(
+                project_id=project_id,
+                total_rows=0,
+                parts_new=0,
+                parts_existing=0,
+                brands_existing=0,
+                brands_to_create=0,
+                brands_to_create_list=[],
+                production_db_status=report.production_db_status or 'unknown',
+                warnings=warnings,
+                blockers=blockers,
+                can_publish=False
+            )
+        
+        logger.info(f"📊 [PREVIEW] Usando dados do relatório já processado:")
+        logger.info(f"  - Total de linhas: {report.total_rows}")
+        logger.info(f"  - Peças novas: {report.parts_new}")
+        logger.info(f"  - Peças existentes: {report.parts_existing}")
+        logger.info(f"  - Marcas novas: {report.brands_new}")
+        logger.info(f"  - Marcas existentes: {report.brands_existing}")
+        
+        # ETAPA 2: Validar conexão com banco de produção (teste rápido)
+        step_start = time.time()
+        logger.info("📊 [PREVIEW] Testando conexão com banco de produção...")
+        
+        from backend.services.data_validation.production_db import test_production_connection
+        db_status = test_production_connection()
+        
+        logger.info(f"📊 [PREVIEW] Teste de conexão concluído em {time.time() - step_start:.2f}s - Status: {db_status['status']}")
+        
+        if db_status['status'] != 'connected':
+            blockers.append(f"Não foi possível conectar ao banco de produção: {db_status.get('error', 'Erro desconhecido')}")
+        
         if not db_status['ready']:
             blockers.append(f"Tabelas faltando no banco de produção: {', '.join(db_status['missing_tables'])}")
         
-        # ETAPA 2: Carregar dados do DuckDB
+        # ETAPA 3: Verificar similaridades (leitura rápida apenas se existir)
         step_start = time.time()
-        logger.info("📊 [PREVIEW] ETAPA 2: Conectando ao DuckDB...")
+        logger.info("📊 [PREVIEW] Verificando coluna similarity...")
         
-        duck = duck_manager.DuckSession(project_id)
-        duck_conn = duck._get_conn(read_only=True)
-        
-        logger.info(f"📊 [PREVIEW] ETAPA 2 concluída em {time.time() - step_start:.2f}s")
-        
-        # ETAPA 3: Contar total de linhas
-        step_start = time.time()
-        logger.info("📊 [PREVIEW] ETAPA 3: Contando total de linhas...")
-        
-        total_rows = duck_conn.execute("SELECT COUNT(*) FROM raw_data").fetchone()[0]
-        
-        logger.info(f"📊 [PREVIEW] ETAPA 3 concluída em {time.time() - step_start:.2f}s - Total: {total_rows} linhas")
-        
-        # ETAPA 4: Buscar dados de brands
-        step_start = time.time()
-        logger.info("📊 [PREVIEW] ETAPA 4: Buscando brands no dataset...")
-        
-        brands_query = """
-            SELECT UPPER(TRIM(brand)) as brand_name, COUNT(*) as cnt
-            FROM raw_data
-            WHERE brand IS NOT NULL AND TRIM(brand) != '' AND UPPER(TRIM(brand)) != 'NAN'
-            GROUP BY UPPER(TRIM(brand))
-        """
-        brands_in_data = duck_conn.execute(brands_query).fetchall()
-        brands_dict = {row[0]: row[1] for row in brands_in_data}
-        
-        logger.info(f"📊 [PREVIEW] ETAPA 4 concluída em {time.time() - step_start:.2f}s - {len(brands_dict)} brands encontradas")
-        
-        # ETAPA 5: Verificar brands existentes na produção
-        step_start = time.time()
-        logger.info("📊 [PREVIEW] ETAPA 5: Verificando brands no banco de produção...")
-        
-        with production_connection() as conn:
-            existing_brands = get_all_brands(conn)
-            logger.info(f"📊 [PREVIEW] ETAPA 5a: {len(existing_brands)} brands existentes no banco")
-            
-            brands_existing = 0
-            brands_to_create_list = []
-            
-            for brand_name, count in brands_dict.items():
-                if brand_name in existing_brands:
-                    brands_existing += 1
-                else:
-                    brands_to_create_list.append(BrandToCreate(brand_name=brand_name, occurrences=count))
-            
-            logger.info(f"📊 [PREVIEW] ETAPA 5 concluída em {time.time() - step_start:.2f}s - {brands_existing} existentes, {len(brands_to_create_list)} novas")
-            
-            # ETAPA 6: Verificar peças existentes
-            step_start = time.time()
-            logger.info("📊 [PREVIEW] ETAPA 6: Buscando peças no dataset...")
-            
-            parts_query = """
-                SELECT UPPER(TRIM(search_ref)) as ref, UPPER(TRIM(brand)) as brand
-                FROM raw_data
-                WHERE search_ref IS NOT NULL AND brand IS NOT NULL
-                AND TRIM(search_ref) != '' AND TRIM(brand) != ''
-            """
-            parts_in_data = duck_conn.execute(parts_query).fetchall()
-            
-            logger.info(f"📊 [PREVIEW] ETAPA 6 concluída em {time.time() - step_start:.2f}s - {len(parts_in_data)} peças encontradas")
-            
-            # ETAPA 7: Contar peças existentes vs novas
-            step_start = time.time()
-            logger.info("📊 [PREVIEW] ETAPA 7: Verificando peças existentes no banco de produção...")
-            
-            cursor = conn.cursor()
-            existing_count = 0
-            batch_size = 1000
-            
-            parts_to_check = []
-            for ref, brand in parts_in_data:
-                if brand in existing_brands:
-                    brand_id = existing_brands[brand][0]
-                    parts_to_check.append((ref, brand_id))
-            
-            logger.info(f"📊 [PREVIEW] ETAPA 7a: {len(parts_to_check)} peças para verificar no banco")
-            
-            if parts_to_check:
-                total_batches = (len(parts_to_check) + batch_size - 1) // batch_size
-                logger.info(f"📊 [PREVIEW] ETAPA 7b: Processando em {total_batches} batches de {batch_size}...")
-                
-                for i in range(0, len(parts_to_check), batch_size):
-                    batch = parts_to_check[i:i + batch_size]
-                    batch_num = (i // batch_size) + 1
-                    
-                    if batch_num % 10 == 0 or batch_num == 1:
-                        logger.info(f"📊 [PREVIEW] ETAPA 7b: Processando batch {batch_num}/{total_batches}...")
-                    
-                    cursor.execute("""
-                        SELECT COUNT(*) FROM catalog_part
-                        WHERE (manufacturer_ref, brand_id) IN %s
-                    """, (tuple(batch),))
-                    existing_count += cursor.fetchone()[0]
-            
-            cursor.close()
-            
-            logger.info(f"📊 [PREVIEW] ETAPA 7 concluída em {time.time() - step_start:.2f}s - {existing_count} peças existentes")
-        
-        parts_new = total_rows - existing_count
-        parts_existing = existing_count
-        
-        # ETAPA 8: Verificar coluna similarity
-        step_start = time.time()
-        logger.info("📊 [PREVIEW] ETAPA 8: Verificando dados de similaridade...")
-        
-        columns = [col[0] for col in duck_conn.execute("DESCRIBE raw_data").fetchall()]
         similarity_preview = None
+        columns = report.columns_found or []
         
         if 'similarity' in columns:
-            sim_count = duck_conn.execute("""
-                SELECT COUNT(*) FROM raw_data 
-                WHERE similarity IS NOT NULL AND TRIM(CAST(similarity AS VARCHAR)) != ''
-            """).fetchone()[0]
-            
-            if sim_count > 0:
-                similarity_preview = SimilarityPreview(
-                    total_rows_with_similarity=sim_count,
-                    unique_similarity_groups=0
-                )
-                logger.info(f"📊 [PREVIEW] ETAPA 8: {sim_count} linhas com similaridade")
+            try:
+                duck = duck_manager.DuckSession(project_id)
+                duck_conn = duck._get_conn(read_only=True)
+                
+                sim_count = duck_conn.execute("""
+                    SELECT COUNT(*) FROM raw_data 
+                    WHERE similarity IS NOT NULL AND TRIM(CAST(similarity AS VARCHAR)) != ''
+                """).fetchone()[0]
+                
+                if sim_count > 0:
+                    similarity_preview = SimilarityPreview(
+                        total_rows_with_similarity=sim_count,
+                        unique_similarity_groups=0
+                    )
+                    logger.info(f"📊 [PREVIEW] {sim_count} linhas com similaridade")
+                
+                duck_conn.close()
+                duck_conn = None
+            except Exception as e:
+                logger.warning(f"📊 [PREVIEW] Erro ao verificar similaridades: {e}")
         
-        logger.info(f"📊 [PREVIEW] ETAPA 8 concluída em {time.time() - step_start:.2f}s")
+        logger.info(f"📊 [PREVIEW] Verificação de similaridades concluída em {time.time() - step_start:.2f}s")
+        
+        # Converter brands_to_create de JSON para objetos
+        brands_to_create_list = []
+        if report.brands_to_create:
+            for item in report.brands_to_create:
+                brands_to_create_list.append(BrandToCreate(
+                    brand_name=item.get('brand_name', ''),
+                    occurrences=item.get('occurrences', 0)
+                ))
         
         # Validações finais
-        if total_rows == 0:
+        if report.total_rows == 0:
             blockers.append("O projeto não contém dados para publicar")
         
         if brands_to_create_list:
@@ -1234,15 +1198,15 @@ def get_publish_preview(project_id: str) -> PublishPreviewResponse:
         can_publish = len(blockers) == 0
         
         total_time = time.time() - start_total
-        logger.info(f"📊 [PREVIEW] ✅ Preview concluído em {total_time:.2f}s - Pode publicar: {can_publish}")
+        logger.info(f"📊 [PREVIEW] ✅ Preview concluído em {total_time:.2f}s usando dados já processados - Pode publicar: {can_publish}")
         
         return PublishPreviewResponse(
             project_id=project_id,
-            total_rows=total_rows,
-            parts_new=parts_new,
-            parts_existing=parts_existing,
-            brands_existing=brands_existing,
-            brands_to_create=len(brands_to_create_list),
+            total_rows=report.total_rows,
+            parts_new=report.parts_new,
+            parts_existing=report.parts_existing,
+            brands_existing=report.brands_existing,
+            brands_to_create=report.brands_new,
             brands_to_create_list=brands_to_create_list,
             similarity=similarity_preview,
             production_db_status=db_status['status'],
@@ -1306,8 +1270,9 @@ def execute_publish(
         # Converter configuração
         update_config = UpdateFieldConfig.from_publish_config(config)
         
-        # Usar author_id como current_owner_id se não fornecido
-        owner_id = current_owner_id or author_id
+        # IMPORTANTE: current_owner_id deve ser um manufacturer_id (ou None)
+        # NÃO usar author_id como fallback pois author_id é um User.id
+        owner_id = current_owner_id  # Pode ser None
         
         # Executar pipeline
         pipeline = PublishPipeline(conn, author_id, owner_id, update_config)
