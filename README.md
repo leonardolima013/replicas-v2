@@ -65,13 +65,13 @@ docker run -d \
 
 ```bash
 # Iniciar todos os serviços
-docker-compose up -d
+sudo docker compose up -d
 
 # Ver logs
-docker-compose logs -f
+sudo docker compose logs -f
 
 # Parar serviços
-docker-compose down
+sudo docker compose down
 ```
 
 ### Acessar a Aplicação
