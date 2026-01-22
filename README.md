@@ -1,6 +1,6 @@
-# Leonardo - Data Validation & PostgreSQL Replicas Manager
+# Data Validation & PostgreSQL Replicas Manager
 
-**TL;DR:** Automated ETL pipeline for automotive parts data validation + on-demand PostgreSQL replica provisioning. Built with React, TypeScript, FastAPI, DuckDB, and Docker.
+Automated ETL pipeline for automotive parts data validation + on-demand PostgreSQL replica provisioning. Built with React, TypeScript, FastAPI, DuckDB, and Docker.
 
 ---
 
