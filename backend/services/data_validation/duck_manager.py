@@ -143,6 +143,17 @@ class DuckSession:
             return columns
         finally:
             conn.close()
+    
+    def get_column_types(self, table_name: str = "raw_data"):
+        """Retorna um dicionário {nome_coluna: tipo_dado} da tabela."""
+        conn = self._get_conn(read_only=True)
+        try:
+            columns_info = conn.execute(f"DESCRIBE {table_name}").fetchall()
+            # columns_info é uma lista de tuplas: (column_name, column_type, null, key, default, extra)
+            column_types = {col[0]: col[1] for col in columns_info}
+            return column_types
+        finally:
+            conn.close()
 
     def rename_column(self, old_name: str, new_name: str, table_name: str = "raw_data"):
         """Renomeia uma coluna na tabela."""
@@ -162,7 +173,13 @@ class DuckSession:
         issues = []
         try:
             current_columns = set(self.get_columns(table_name))
-            valid_columns = columns_to_check & current_columns
+            column_types = self.get_column_types(table_name)
+            
+            # Filtrar apenas colunas que existem E são do tipo string (VARCHAR, TEXT, etc.)
+            valid_columns = [
+                col for col in (columns_to_check & current_columns)
+                if column_types.get(col, '').upper() in ('VARCHAR', 'TEXT', 'STRING')
+            ]
             
             for col in valid_columns:
                 query = f"SELECT COUNT(*) FROM {table_name} WHERE \"{col}\" IS NOT NULL AND \"{col}\" != '' AND \"{col}\" != UPPER(\"{col}\")"
@@ -179,7 +196,13 @@ class DuckSession:
         issues = []
         try:
             current_columns = set(self.get_columns(table_name))
-            valid_columns = columns_to_check & current_columns
+            column_types = self.get_column_types(table_name)
+            
+            # Filtrar apenas colunas que existem E são do tipo string
+            valid_columns = [
+                col for col in (columns_to_check & current_columns)
+                if column_types.get(col, '').upper() in ('VARCHAR', 'TEXT', 'STRING')
+            ]
             
             for col in valid_columns:
                 # Considera erro apenas strings vazias (após TRIM)
@@ -243,15 +266,16 @@ class DuckSession:
             if "ncm" not in current_columns:
                 return 0
             
+            # Fazer CAST para VARCHAR para garantir compatibilidade com funções de string
             query = f"""
                 SELECT COUNT(*) FROM {table_name}
                 WHERE
                     ncm IS NOT NULL
-                    AND ncm != ''
+                    AND CAST(ncm AS VARCHAR) != ''
                     AND (
-                        LENGTH(REPLACE(ncm, '.', '')) != 8
-                        OR ncm SIMILAR TO '.*[a-zA-Z].*'
-                        OR ncm LIKE '%-%'
+                        LENGTH(REPLACE(CAST(ncm AS VARCHAR), '.', '')) != 8
+                        OR CAST(ncm AS VARCHAR) SIMILAR TO '.*[a-zA-Z].*'
+                        OR CAST(ncm AS VARCHAR) LIKE '%-%'
                     )
             """
             count = conn.execute(query).fetchone()[0]
@@ -267,14 +291,15 @@ class DuckSession:
             if "barcode" not in current_columns:
                 return 0
             
+            # Fazer CAST para VARCHAR para garantir compatibilidade com funções de string
             query = f"""
                 SELECT COUNT(*) FROM {table_name}
                 WHERE
                     barcode IS NOT NULL
-                    AND barcode != ''
+                    AND CAST(barcode AS VARCHAR) != ''
                     AND (
-                        LENGTH(barcode) NOT IN (8, 12, 13)
-                        OR barcode SIMILAR TO '.*[^0-9].*'
+                        LENGTH(CAST(barcode AS VARCHAR)) NOT IN (8, 12, 13)
+                        OR CAST(barcode AS VARCHAR) SIMILAR TO '.*[^0-9].*'
                     )
             """
             count = conn.execute(query).fetchone()[0]
@@ -384,7 +409,13 @@ class DuckSession:
         """Converte strings vazias para NULL em colunas de texto."""
         # Obter colunas válidas usando método separado
         current_columns = set(self.get_columns(table_name))
-        valid_columns = columns_to_fix & current_columns
+        column_types = self.get_column_types(table_name)
+        
+        # Filtrar apenas colunas que existem E são do tipo string
+        valid_columns = [
+            col for col in (columns_to_fix & current_columns)
+            if column_types.get(col, '').upper() in ('VARCHAR', 'TEXT', 'STRING')
+        ]
         
         conn = self._get_conn(read_only=False)
         try:
@@ -412,7 +443,13 @@ class DuckSession:
         """Converte valores para UPPERCASE em colunas de texto."""
         # Obter colunas válidas usando método separado
         current_columns = set(self.get_columns(table_name))
-        valid_columns = columns_to_fix & current_columns
+        column_types = self.get_column_types(table_name)
+        
+        # Filtrar apenas colunas que existem E são do tipo string
+        valid_columns = [
+            col for col in (columns_to_fix & current_columns)
+            if column_types.get(col, '').upper() in ('VARCHAR', 'TEXT', 'STRING')
+        ]
         
         conn = self._get_conn(read_only=False)
         try:
@@ -476,16 +513,17 @@ class DuckSession:
             conn.create_function("fix_ean_udf", _python_fix_barcode)
             
             # Contar quantas linhas serão afetadas (antes da correção)
+            # Fazer CAST para garantir compatibilidade
             count_query = f"""
                 SELECT COUNT(*) FROM {table_name}
                 WHERE barcode IS NOT NULL 
-                AND barcode != '' 
-                AND barcode != fix_ean_udf(barcode)
+                AND CAST(barcode AS VARCHAR) != '' 
+                AND CAST(barcode AS VARCHAR) != fix_ean_udf(CAST(barcode AS VARCHAR))
             """
             affected = conn.execute(count_query).fetchone()[0]
             
             # Executar a correção em massa
-            conn.execute(f"UPDATE {table_name} SET barcode = fix_ean_udf(barcode) WHERE barcode IS NOT NULL AND barcode != ''")
+            conn.execute(f"UPDATE {table_name} SET barcode = fix_ean_udf(CAST(barcode AS VARCHAR)) WHERE barcode IS NOT NULL AND CAST(barcode AS VARCHAR) != ''")
             
             return {"columns": ["barcode"], "rows_affected": affected}
         finally:
@@ -499,17 +537,17 @@ class DuckSession:
         
         conn = self._get_conn(read_only=False)
         try:
-            # Contar linhas que serão afetadas
+            # Contar linhas que serão afetadas (fazer CAST para garantir compatibilidade)
             count_query = f"""
                 SELECT COUNT(*) FROM {table_name}
                 WHERE ncm IS NOT NULL 
-                AND ncm != ''
-                AND ncm != regexp_replace(ncm, '[^0-9]', '', 'g')
+                AND CAST(ncm AS VARCHAR) != ''
+                AND CAST(ncm AS VARCHAR) != regexp_replace(CAST(ncm AS VARCHAR), '[^0-9]', '', 'g')
             """
             affected = conn.execute(count_query).fetchone()[0]
             
             # Remover tudo que não for número
-            conn.execute(f"UPDATE {table_name} SET ncm = regexp_replace(ncm, '[^0-9]', '', 'g') WHERE ncm IS NOT NULL AND ncm != ''")
+            conn.execute(f"UPDATE {table_name} SET ncm = regexp_replace(CAST(ncm AS VARCHAR), '[^0-9]', '', 'g') WHERE ncm IS NOT NULL AND CAST(ncm AS VARCHAR) != ''")
             
             return {"columns": ["ncm"], "rows_affected": affected}
         finally:
