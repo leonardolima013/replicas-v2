@@ -1,3 +1,5 @@
+[![en](https://img.shields.io/badge/lang-en-blue.svg)](README.md) [![pt-br](https://img.shields.io/badge/lang-pt--br-green.svg)](README.pt-BR.md)
+
 # Data Validation & PostgreSQL Replicas Manager
 
 Automated ETL pipeline for automotive parts data validation + on-demand PostgreSQL replica provisioning. Built with React, TypeScript, FastAPI, DuckDB, and Docker.
