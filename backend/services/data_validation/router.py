@@ -1641,3 +1641,326 @@ def execute_publish(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Erro ao executar publicação: {str(e)}")
+
+
+# ==============================================================================
+# ROTAS PARA PROCESSAMENTO DE IMAGENS (lambda_function)
+# ==============================================================================
+
+@router.post("/{project_id}/images/upload", response_model=schemas.ImageUploadResponse)
+def upload_images_batch(
+    project_id: str,
+    request: schemas.ImageUploadRequest,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Inicia o processamento de um batch de imagens para um projeto.
+    
+    As imagens são processadas em background via Celery:
+    1. Redimensionamento para 4 variantes (high, medium, low, watermark)
+    2. Upload para S3
+    3. Agrupamento por SKU
+    
+    O environment define a pasta de destino no S3:
+    - 'test': pasta 'test-lambda'
+    - 'production': pasta 'media'
+    """
+    # Verificar se o projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar permissão (owner ou admin)
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para este projeto")
+    
+    # Validar environment
+    valid_environments = ['test', 'production']
+    if request.environment not in valid_environments:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ambiente inválido: {request.environment}. Use: {valid_environments}"
+        )
+    
+    # Verificar se há imagens
+    if not request.images:
+        raise HTTPException(status_code=400, detail="Nenhuma imagem fornecida")
+    
+    # Importar task aqui para evitar imports circulares
+    from backend.services.data_validation.tasks import process_images_batch
+    
+    # Preparar dados para a task
+    images_data = [
+        {"filename": img.filename, "content": img.content}
+        for img in request.images
+    ]
+    
+    # Iniciar task Celery
+    task = process_images_batch.delay(
+        project_id=project_id,
+        images_data=images_data,
+        environment=request.environment
+    )
+    
+    # Criar registro da task
+    task_record = db.query(models.ImageProcessingTask).filter(
+        models.ImageProcessingTask.project_id == project_id
+    ).first()
+    
+    if not task_record:
+        task_record = models.ImageProcessingTask(
+            project_id=project_id,
+            celery_task_id=task.id,
+            environment=request.environment,
+            total_images=len(request.images),
+            status="pending"
+        )
+        db.add(task_record)
+    else:
+        task_record.celery_task_id = task.id
+        task_record.environment = request.environment
+        task_record.total_images = len(request.images)
+        task_record.status = "pending"
+    
+    db.commit()
+    
+    return schemas.ImageUploadResponse(
+        task_id=task.id,
+        project_id=project_id,
+        total_images=len(request.images),
+        status="pending",
+        message=f"Processamento iniciado. {len(request.images)} imagens serão processadas."
+    )
+
+
+@router.get("/{project_id}/images/status", response_model=schemas.ImageProcessingStatusResponse)
+def get_images_processing_status(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Retorna o status atual do processamento de imagens de um projeto.
+    """
+    # Verificar se o projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar permissão
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para este projeto")
+    
+    # Buscar task
+    task_record = db.query(models.ImageProcessingTask).filter(
+        models.ImageProcessingTask.project_id == project_id
+    ).first()
+    
+    if not task_record:
+        return schemas.ImageProcessingStatusResponse(
+            project_id=project_id,
+            status="not_started",
+            progress=0.0,
+            total_images=0,
+            processed_images=0,
+            failed_images=0
+        )
+    
+    return schemas.ImageProcessingStatusResponse(
+        project_id=project_id,
+        task_id=task_record.celery_task_id,
+        environment=task_record.environment or "test",
+        status=task_record.status,
+        progress=task_record.processing_progress or 0.0,
+        current_step=task_record.processing_step,
+        total_images=task_record.total_images or 0,
+        processed_images=task_record.processed_images or 0,
+        failed_images=task_record.failed_images or 0,
+        processing_time_seconds=task_record.processing_time_seconds,
+        error_message=task_record.error_message
+    )
+
+
+@router.get("/{project_id}/images/result", response_model=schemas.ImageProcessingResultResponse)
+def get_images_processing_result(
+    project_id: str,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Retorna o resultado completo do processamento de imagens.
+    Inclui todas as URLs geradas agrupadas por SKU.
+    """
+    # Verificar se o projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar permissão
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para este projeto")
+    
+    # Buscar task
+    task_record = db.query(models.ImageProcessingTask).filter(
+        models.ImageProcessingTask.project_id == project_id
+    ).first()
+    
+    if not task_record:
+        raise HTTPException(status_code=404, detail="Nenhum processamento de imagens encontrado")
+    
+    if task_record.status != "completed":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Processamento ainda não concluído. Status: {task_record.status}"
+        )
+    
+    # Converter result_data para o formato esperado
+    results = {}
+    if task_record.result_data:
+        for sku, urls in task_record.result_data.items():
+            results[sku] = schemas.ImageUrlSet(
+                high=urls.get('high', []),
+                medium=urls.get('medium', []),
+                low=urls.get('low', []),
+                watermark=urls.get('watermark', [])
+            )
+    
+    errors = []
+    if task_record.errors_data:
+        for err in task_record.errors_data:
+            errors.append(schemas.ImageProcessingError(
+                filename=err.get('filename', ''),
+                error=err.get('error', '')
+            ))
+    
+    return schemas.ImageProcessingResultResponse(
+        project_id=project_id,
+        status=task_record.status,
+        total_images=task_record.total_images or 0,
+        processed_images=task_record.processed_images or 0,
+        failed_images=task_record.failed_images or 0,
+        skus_count=len(results),
+        results=results,
+        errors=errors,
+        processing_time_seconds=task_record.processing_time_seconds
+    )
+
+
+@router.post("/{project_id}/images/link", response_model=schemas.ImageLinkResponse)
+def link_images_to_project(
+    project_id: str,
+    request: schemas.ImageLinkRequest = None,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Vincula as URLs de imagens processadas aos registros do DuckDB.
+    
+    Atualiza as colunas file_high, file_medium, file_low, file_water_mark
+    baseado no search_ref de cada SKU.
+    
+    Se image_urls não for fornecido, usa o resultado da última task de processamento.
+    """
+    # Verificar se o projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar permissão
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para este projeto")
+    
+    # Obter URLs de imagens
+    image_urls = None
+    
+    if request and request.image_urls:
+        # Usar URLs fornecidas no request
+        image_urls = {
+            sku: {
+                'high': url_set.high,
+                'medium': url_set.medium,
+                'low': url_set.low,
+                'watermark': url_set.watermark
+            }
+            for sku, url_set in request.image_urls.items()
+        }
+    else:
+        # Buscar da última task de processamento
+        task_record = db.query(models.ImageProcessingTask).filter(
+            models.ImageProcessingTask.project_id == project_id
+        ).first()
+        
+        if not task_record or not task_record.result_data:
+            raise HTTPException(
+                status_code=400,
+                detail="Nenhum resultado de processamento encontrado. Processe as imagens primeiro."
+            )
+        
+        if task_record.status != "completed":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Processamento ainda não concluído. Status: {task_record.status}"
+            )
+        
+        image_urls = task_record.result_data
+    
+    if not image_urls:
+        raise HTTPException(status_code=400, detail="Nenhuma URL de imagem para vincular")
+    
+    # Vincular imagens ao DuckDB
+    duck = duck_manager.DuckSession(project_id)
+    result = duck.link_image_urls(image_urls)
+    
+    # Salvar resultado da vinculação
+    linking_result = models.ImageLinkingResult(
+        project_id=project_id,
+        total_skus=result['total_skus'],
+        linked_skus=result['linked_skus'],
+        not_found_skus=result['not_found_skus']
+    )
+    db.add(linking_result)
+    db.commit()
+    
+    # Preparar mensagem
+    if result['not_found_skus']:
+        message = (
+            f"Vinculação concluída com alertas. "
+            f"{result['linked_skus']}/{result['total_skus']} SKUs vinculados. "
+            f"{len(result['not_found_skus'])} SKUs não encontrados no CSV."
+        )
+    else:
+        message = f"Vinculação concluída com sucesso. {result['linked_skus']} SKUs vinculados."
+    
+    return schemas.ImageLinkResponse(
+        project_id=project_id,
+        total_skus=result['total_skus'],
+        linked_skus=result['linked_skus'],
+        not_found_skus=result['not_found_skus'],
+        message=message
+    )
+
+
+@router.get("/{project_id}/images/preview")
+def get_images_preview(
+    project_id: str,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(database.get_db),
+    current_user: core_models.User = Depends(deps.get_current_user)
+):
+    """
+    Retorna preview dos registros com imagens vinculadas no DuckDB.
+    """
+    # Verificar se o projeto existe
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado")
+    
+    # Verificar permissão
+    if project.owner_id != current_user.id and current_user.role != "adm":
+        raise HTTPException(status_code=403, detail="Sem permissão para este projeto")
+    
+    # Obter preview
+    duck = duck_manager.DuckSession(project_id)
+    return duck.get_image_linking_preview(page=page, page_size=page_size)

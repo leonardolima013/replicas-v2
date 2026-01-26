@@ -318,7 +318,7 @@ export const getProjects = async (): Promise<ProjectsListResponse> => {
  */
 export const uploadCSV = async (
   file: File,
-  projectName?: string
+  projectName?: string,
 ): Promise<UploadResponse> => {
   try {
     const formData = new FormData();
@@ -334,7 +334,7 @@ export const uploadCSV = async (
         headers: {
           "Content-Type": "multipart/form-data",
         },
-      }
+      },
     );
     return response.data;
   } catch (error: any) {
@@ -343,11 +343,12 @@ export const uploadCSV = async (
     }
     if (error.response?.status === 400) {
       throw new Error(
-        error.response?.data?.detail || "Arquivo inválido. Envie um CSV válido."
+        error.response?.data?.detail ||
+          "Arquivo inválido. Envie um CSV válido.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao fazer upload do arquivo."
+      error.response?.data?.detail || "Erro ao fazer upload do arquivo.",
     );
   }
 };
@@ -361,14 +362,14 @@ export const uploadCSV = async (
 export const getPreview = async (
   projectId: string,
   page: number = 1,
-  pageSize: number = 50
+  pageSize: number = 50,
 ): Promise<PreviewResponse> => {
   try {
     const response = await api.get<PreviewResponse>(
       `/validation/${projectId}/preview`,
       {
         params: { page, page_size: pageSize },
-      }
+      },
     );
     return response.data;
   } catch (error: any) {
@@ -379,7 +380,7 @@ export const getPreview = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao buscar preview dos dados."
+      error.response?.data?.detail || "Erro ao buscar preview dos dados.",
     );
   }
 };
@@ -389,11 +390,11 @@ export const getPreview = async (
  * @param projectId - ID do projeto
  */
 export const getDiagnosis = async (
-  projectId: string
+  projectId: string,
 ): Promise<TreatmentDiagnosisResponse> => {
   try {
     const response = await api.get<TreatmentDiagnosisResponse>(
-      `/validation/${projectId}/treatments/diagnosis`
+      `/validation/${projectId}/treatments/diagnosis`,
     );
     return response.data;
   } catch (error: any) {
@@ -404,7 +405,7 @@ export const getDiagnosis = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao buscar diagnóstico."
+      error.response?.data?.detail || "Erro ao buscar diagnóstico.",
     );
   }
 };
@@ -416,7 +417,7 @@ export const getDiagnosis = async (
 export const fixNCM = async (projectId: string): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-ncm`
+      `/validation/${projectId}/treatments/fix-ncm`,
     );
     return response.data;
   } catch (error: any) {
@@ -437,7 +438,7 @@ export const fixNCM = async (projectId: string): Promise<FixResponse> => {
 export const fixBarcodes = async (projectId: string): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-barcode`
+      `/validation/${projectId}/treatments/fix-barcode`,
     );
     return response.data;
   } catch (error: any) {
@@ -448,7 +449,7 @@ export const fixBarcodes = async (projectId: string): Promise<FixResponse> => {
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao corrigir códigos de barras."
+      error.response?.data?.detail || "Erro ao corrigir códigos de barras.",
     );
   }
 };
@@ -460,7 +461,7 @@ export const fixBarcodes = async (projectId: string): Promise<FixResponse> => {
 export const fixWeights = async (projectId: string): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-negative-weights`
+      `/validation/${projectId}/treatments/fix-negative-weights`,
     );
     return response.data;
   } catch (error: any) {
@@ -479,11 +480,11 @@ export const fixWeights = async (projectId: string): Promise<FixResponse> => {
  * @param projectId - ID do projeto
  */
 export const fixDimensions = async (
-  projectId: string
+  projectId: string,
 ): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-dimensions`
+      `/validation/${projectId}/treatments/fix-dimensions`,
     );
     return response.data;
   } catch (error: any) {
@@ -494,7 +495,7 @@ export const fixDimensions = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao corrigir dimensões."
+      error.response?.data?.detail || "Erro ao corrigir dimensões.",
     );
   }
 };
@@ -506,7 +507,7 @@ export const fixDimensions = async (
 export const fixCodes = async (projectId: string): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-codes`
+      `/validation/${projectId}/treatments/fix-codes`,
     );
     return response.data;
   } catch (error: any) {
@@ -517,7 +518,7 @@ export const fixCodes = async (projectId: string): Promise<FixResponse> => {
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao corrigir códigos de referência."
+      error.response?.data?.detail || "Erro ao corrigir códigos de referência.",
     );
   }
 };
@@ -527,11 +528,11 @@ export const fixCodes = async (projectId: string): Promise<FixResponse> => {
  * @param projectId - ID do projeto
  */
 export const fixNullStrings = async (
-  projectId: string
+  projectId: string,
 ): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-nulls-string`
+      `/validation/${projectId}/treatments/fix-nulls-string`,
     );
     return response.data;
   } catch (error: any) {
@@ -542,7 +543,7 @@ export const fixNullStrings = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao corrigir nulos em strings."
+      error.response?.data?.detail || "Erro ao corrigir nulos em strings.",
     );
   }
 };
@@ -554,7 +555,7 @@ export const fixNullStrings = async (
 export const fixUppercase = async (projectId: string): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-uppercase`
+      `/validation/${projectId}/treatments/fix-uppercase`,
     );
     return response.data;
   } catch (error: any) {
@@ -565,7 +566,7 @@ export const fixUppercase = async (projectId: string): Promise<FixResponse> => {
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao aplicar uppercase."
+      error.response?.data?.detail || "Erro ao aplicar uppercase.",
     );
   }
 };
@@ -575,11 +576,11 @@ export const fixUppercase = async (projectId: string): Promise<FixResponse> => {
  * @param projectId - ID do projeto
  */
 export const fixNullNumerics = async (
-  projectId: string
+  projectId: string,
 ): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/treatments/fix-nulls-numeric`
+      `/validation/${projectId}/treatments/fix-nulls-numeric`,
     );
     return response.data;
   } catch (error: any) {
@@ -590,7 +591,7 @@ export const fixNullNumerics = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao corrigir nulos em numéricos."
+      error.response?.data?.detail || "Erro ao corrigir nulos em numéricos.",
     );
   }
 };
@@ -600,11 +601,11 @@ export const fixNullNumerics = async (
  * @param projectId - ID do projeto
  */
 export const getColumnsAnalysis = async (
-  projectId: string
+  projectId: string,
 ): Promise<ColumnsAnalysisResponse> => {
   try {
     const response = await api.get<ColumnsAnalysisResponse>(
-      `/validation/${projectId}/columns/analysis`
+      `/validation/${projectId}/columns/analysis`,
     );
     return response.data;
   } catch (error: any) {
@@ -615,7 +616,7 @@ export const getColumnsAnalysis = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao analisar colunas."
+      error.response?.data?.detail || "Erro ao analisar colunas.",
     );
   }
 };
@@ -629,12 +630,12 @@ export const getColumnsAnalysis = async (
 export const renameColumn = async (
   projectId: string,
   oldName: string,
-  newName: string
+  newName: string,
 ): Promise<RenameColumnResponse> => {
   try {
     const response = await api.post<RenameColumnResponse>(
       `/validation/${projectId}/columns/rename`,
-      { old_name: oldName, new_name: newName }
+      { old_name: oldName, new_name: newName },
     );
     return response.data;
   } catch (error: any) {
@@ -646,7 +647,7 @@ export const renameColumn = async (
     }
     if (error.response?.status === 400) {
       throw new Error(
-        error.response?.data?.detail || "Erro de validação ao renomear coluna."
+        error.response?.data?.detail || "Erro de validação ao renomear coluna.",
       );
     }
     throw new Error(error.response?.data?.detail || "Erro ao renomear coluna.");
@@ -673,7 +674,7 @@ export const submitProject = async (projectId: string): Promise<Project> => {
     }
     if (error.response?.status === 400) {
       throw new Error(
-        error.response?.data?.detail || "Projeto não pode ser enviado."
+        error.response?.data?.detail || "Projeto não pode ser enviado.",
       );
     }
     throw new Error(error.response?.data?.detail || "Erro ao enviar projeto.");
@@ -700,11 +701,11 @@ export const cancelProject = async (projectId: string): Promise<Project> => {
     }
     if (error.response?.status === 400) {
       throw new Error(
-        error.response?.data?.detail || "Projeto não pode ser cancelado."
+        error.response?.data?.detail || "Projeto não pode ser cancelado.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao cancelar projeto."
+      error.response?.data?.detail || "Erro ao cancelar projeto.",
     );
   }
 };
@@ -714,11 +715,11 @@ export const cancelProject = async (projectId: string): Promise<Project> => {
  * @param projectId - ID do projeto
  */
 export const getStatistics = async (
-  projectId: string
+  projectId: string,
 ): Promise<StatisticsResponse> => {
   try {
     const response = await api.get<StatisticsResponse>(
-      `/validation/${projectId}/statistics`
+      `/validation/${projectId}/statistics`,
     );
     return response.data;
   } catch (error: any) {
@@ -732,7 +733,7 @@ export const getStatistics = async (
       throw new Error("Sem permissão para acessar este projeto.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao buscar estatísticas."
+      error.response?.data?.detail || "Erro ao buscar estatísticas.",
     );
   }
 };
@@ -746,12 +747,12 @@ export const getStatistics = async (
 export const getDuplicatesDiagnosis = async (
   projectId: string,
   page: number = 1,
-  pageSize: number = 50
+  pageSize: number = 50,
 ): Promise<DuplicatesDiagnosisResponse> => {
   try {
     const response = await api.get<DuplicatesDiagnosisResponse>(
       `/validation/${projectId}/duplicates/diagnosis`,
-      { params: { page, page_size: pageSize } }
+      { params: { page, page_size: pageSize } },
     );
     return response.data;
   } catch (error: any) {
@@ -765,7 +766,7 @@ export const getDuplicatesDiagnosis = async (
       throw new Error("Sem permissão para acessar este projeto.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao diagnosticar duplicatas."
+      error.response?.data?.detail || "Erro ao diagnosticar duplicatas.",
     );
   }
 };
@@ -775,11 +776,11 @@ export const getDuplicatesDiagnosis = async (
  * @param projectId - ID do projeto
  */
 export const removeDuplicates = async (
-  projectId: string
+  projectId: string,
 ): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/duplicates/remove`
+      `/validation/${projectId}/duplicates/remove`,
     );
     return response.data;
   } catch (error: any) {
@@ -793,7 +794,7 @@ export const removeDuplicates = async (
       throw new Error("Sem permissão para alterar este projeto.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao remover duplicatas."
+      error.response?.data?.detail || "Erro ao remover duplicatas.",
     );
   }
 };
@@ -824,11 +825,11 @@ export const deleteProject = async (projectId: string): Promise<void> => {
  * @param projectId - ID do projeto
  */
 export const analyzeBrands = async (
-  projectId: string
+  projectId: string,
 ): Promise<BrandAnalysisResponse> => {
   try {
     const response = await api.get<BrandAnalysisResponse>(
-      `/validation/${projectId}/brands/analysis`
+      `/validation/${projectId}/brands/analysis`,
     );
     return response.data;
   } catch (error: any) {
@@ -842,7 +843,7 @@ export const analyzeBrands = async (
       throw new Error("Sem permissão de acesso a este projeto.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao analisar mapeamento de marcas."
+      error.response?.data?.detail || "Erro ao analisar mapeamento de marcas.",
     );
   }
 };
@@ -852,11 +853,11 @@ export const analyzeBrands = async (
  * @param projectId - ID do projeto
  */
 export const applyBrandNormalization = async (
-  projectId: string
+  projectId: string,
 ): Promise<BrandApplicationResponse> => {
   try {
     const response = await api.post<BrandApplicationResponse>(
-      `/validation/${projectId}/brands/apply`
+      `/validation/${projectId}/brands/apply`,
     );
     return response.data;
   } catch (error: any) {
@@ -872,11 +873,11 @@ export const applyBrandNormalization = async (
     if (error.response?.status === 400) {
       throw new Error(
         error.response?.data?.detail ||
-          "Projeto não pode ser alterado. Apenas projetos em DRAFT podem ser editados."
+          "Projeto não pode ser alterado. Apenas projetos em DRAFT podem ser editados.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao aplicar normalização de marcas."
+      error.response?.data?.detail || "Erro ao aplicar normalização de marcas.",
     );
   }
 };
@@ -886,11 +887,11 @@ export const applyBrandNormalization = async (
  * @param projectId - ID do projeto
  */
 export const getQualityReport = async (
-  projectId: string
+  projectId: string,
 ): Promise<QualityReportResponse> => {
   try {
     const response = await api.get<QualityReportResponse>(
-      `/validation/${projectId}/quality-report`
+      `/validation/${projectId}/quality-report`,
     );
     return response.data;
   } catch (error: any) {
@@ -904,7 +905,7 @@ export const getQualityReport = async (
       throw new Error("Sem permissão de acesso a este projeto.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao gerar relatório de qualidade."
+      error.response?.data?.detail || "Erro ao gerar relatório de qualidade.",
     );
   }
 };
@@ -1007,11 +1008,11 @@ export interface AvailableFieldsResponse {
  * @param projectId - ID do projeto
  */
 export const getPublishPreview = async (
-  projectId: string
+  projectId: string,
 ): Promise<PublishPreviewResponse> => {
   try {
     const response = await api.get<PublishPreviewResponse>(
-      `/validation/${projectId}/publish/preview`
+      `/validation/${projectId}/publish/preview`,
     );
     return response.data;
   } catch (error: any) {
@@ -1027,11 +1028,11 @@ export const getPublishPreview = async (
     if (error.response?.status === 400) {
       throw new Error(
         error.response?.data?.detail ||
-          "Projeto deve estar em status PENDING_REVIEW para publicação."
+          "Projeto deve estar em status PENDING_REVIEW para publicação.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao gerar preview de publicação."
+      error.response?.data?.detail || "Erro ao gerar preview de publicação.",
     );
   }
 };
@@ -1042,7 +1043,7 @@ export const getPublishPreview = async (
 export const getProductionDBStatus = async (): Promise<ProductionDBStatus> => {
   try {
     const response = await api.get<ProductionDBStatus>(
-      `/validation/publish/db-status`
+      `/validation/publish/db-status`,
     );
     return response.data;
   } catch (error: any) {
@@ -1051,11 +1052,11 @@ export const getProductionDBStatus = async (): Promise<ProductionDBStatus> => {
     }
     if (error.response?.status === 403) {
       throw new Error(
-        "Apenas administradores podem verificar status do banco."
+        "Apenas administradores podem verificar status do banco.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao verificar status do banco."
+      error.response?.data?.detail || "Erro ao verificar status do banco.",
     );
   }
 };
@@ -1067,7 +1068,7 @@ export const getAvailableFields =
   async (): Promise<AvailableFieldsResponse> => {
     try {
       const response = await api.get<AvailableFieldsResponse>(
-        `/validation/publish/available-fields`
+        `/validation/publish/available-fields`,
       );
       return response.data;
     } catch (error: any) {
@@ -1078,7 +1079,7 @@ export const getAvailableFields =
         throw new Error("Apenas administradores podem acessar configuração.");
       }
       throw new Error(
-        error.response?.data?.detail || "Erro ao buscar campos disponíveis."
+        error.response?.data?.detail || "Erro ao buscar campos disponíveis.",
       );
     }
   };
@@ -1090,12 +1091,12 @@ export const getAvailableFields =
  */
 export const executePublish = async (
   projectId: string,
-  request: PublishRequest
+  request: PublishRequest,
 ): Promise<PublishResponse> => {
   try {
     const response = await api.post<PublishResponse>(
       `/validation/${projectId}/publish`,
-      request
+      request,
     );
     return response.data;
   } catch (error: any) {
@@ -1111,11 +1112,11 @@ export const executePublish = async (
     if (error.response?.status === 400) {
       throw new Error(
         error.response?.data?.detail ||
-          "Projeto deve estar em status READY_TO_PUBLISH para publicação."
+          "Projeto deve estar em status READY_TO_PUBLISH para publicação.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao executar publicação."
+      error.response?.data?.detail || "Erro ao executar publicação.",
     );
   }
 };
@@ -1127,11 +1128,11 @@ export const executePublish = async (
  * @param projectId - ID do projeto
  */
 export const getProjectProgress = async (
-  projectId: string
+  projectId: string,
 ): Promise<ProjectProgress> => {
   try {
     const response = await api.get<ProjectProgress>(
-      `/validation/${projectId}/progress`
+      `/validation/${projectId}/progress`,
     );
     return response.data;
   } catch (error: any) {
@@ -1142,7 +1143,7 @@ export const getProjectProgress = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao buscar progresso do projeto."
+      error.response?.data?.detail || "Erro ao buscar progresso do projeto.",
     );
   }
 };
@@ -1152,11 +1153,11 @@ export const getProjectProgress = async (
  * @param projectId - ID do projeto
  */
 export const retryProjectProcessing = async (
-  projectId: string
+  projectId: string,
 ): Promise<{ message: string }> => {
   try {
     const response = await api.post<{ message: string }>(
-      `/validation/${projectId}/retry`
+      `/validation/${projectId}/retry`,
     );
     return response.data;
   } catch (error: any) {
@@ -1169,11 +1170,11 @@ export const retryProjectProcessing = async (
     if (error.response?.status === 400) {
       throw new Error(
         error.response?.data?.detail ||
-          "Projeto deve estar em status de erro para reprocessar."
+          "Projeto deve estar em status de erro para reprocessar.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao reprocessar projeto."
+      error.response?.data?.detail || "Erro ao reprocessar projeto.",
     );
   }
 };
@@ -1183,11 +1184,11 @@ export const retryProjectProcessing = async (
  * @param projectId - ID do projeto
  */
 export const recalculateProjectReport = async (
-  projectId: string
+  projectId: string,
 ): Promise<{ message: string }> => {
   try {
     const response = await api.post<{ message: string }>(
-      `/validation/${projectId}/recalculate`
+      `/validation/${projectId}/recalculate`,
     );
     return response.data;
   } catch (error: any) {
@@ -1203,11 +1204,11 @@ export const recalculateProjectReport = async (
     if (error.response?.status === 400) {
       throw new Error(
         error.response?.data?.detail ||
-          "Projeto deve estar em status READY_TO_PUBLISH para recalcular."
+          "Projeto deve estar em status READY_TO_PUBLISH para recalcular.",
       );
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao recalcular relatório."
+      error.response?.data?.detail || "Erro ao recalcular relatório.",
     );
   }
 };
@@ -1217,11 +1218,11 @@ export const recalculateProjectReport = async (
  * @param projectId - ID do projeto
  */
 export const getProjectReport = async (
-  projectId: string
+  projectId: string,
 ): Promise<ProjectReport> => {
   try {
     const response = await api.get<ProjectReport>(
-      `/validation/${projectId}/report`
+      `/validation/${projectId}/report`,
     );
     return response.data;
   } catch (error: any) {
@@ -1232,7 +1233,7 @@ export const getProjectReport = async (
       throw new Error("Projeto ou relatório não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao buscar relatório do projeto."
+      error.response?.data?.detail || "Erro ao buscar relatório do projeto.",
     );
   }
 };
@@ -1244,14 +1245,14 @@ export const getProjectReport = async (
  */
 export const getValidationHistory = async (
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
 ): Promise<ValidationHistoryResponse> => {
   try {
     const response = await api.get<ValidationHistoryResponse>(
       `/validation/history`,
       {
         params: { page, page_size: pageSize },
-      }
+      },
     );
     return response.data;
   } catch (error: any) {
@@ -1262,7 +1263,7 @@ export const getValidationHistory = async (
       throw new Error("Apenas administradores podem acessar o histórico.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao buscar histórico de validações."
+      error.response?.data?.detail || "Erro ao buscar histórico de validações.",
     );
   }
 };
@@ -1276,14 +1277,14 @@ export const getValidationHistory = async (
 export const getSimilaritiesDiagnosis = async (
   projectId: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
 ): Promise<SimilaritiesDiagnosisResponse> => {
   try {
     const response = await api.get<SimilaritiesDiagnosisResponse>(
       `/validation/${projectId}/similarities/diagnosis`,
       {
         params: { page, page_size: pageSize },
-      }
+      },
     );
     return response.data;
   } catch (error: any) {
@@ -1295,7 +1296,7 @@ export const getSimilaritiesDiagnosis = async (
     }
     throw new Error(
       error.response?.data?.detail ||
-        "Erro ao buscar diagnóstico de similaridades."
+        "Erro ao buscar diagnóstico de similaridades.",
     );
   }
 };
@@ -1305,11 +1306,11 @@ export const getSimilaritiesDiagnosis = async (
  * @param projectId - ID do projeto
  */
 export const fixAllSimilarities = async (
-  projectId: string
+  projectId: string,
 ): Promise<FixResponse> => {
   try {
     const response = await api.post<FixResponse>(
-      `/validation/${projectId}/similarities/fix-all`
+      `/validation/${projectId}/similarities/fix-all`,
     );
     return response.data;
   } catch (error: any) {
@@ -1320,7 +1321,7 @@ export const fixAllSimilarities = async (
       throw new Error("Projeto não encontrado.");
     }
     throw new Error(
-      error.response?.data?.detail || "Erro ao corrigir similaridades."
+      error.response?.data?.detail || "Erro ao corrigir similaridades.",
     );
   }
 };
@@ -1330,11 +1331,11 @@ export const fixAllSimilarities = async (
  * @param projectId - ID do projeto
  */
 export const getSimilaritiesStatistics = async (
-  projectId: string
+  projectId: string,
 ): Promise<SimilaritiesStatisticsResponse> => {
   try {
     const response = await api.get<SimilaritiesStatisticsResponse>(
-      `/validation/${projectId}/similarities/statistics`
+      `/validation/${projectId}/similarities/statistics`,
     );
     return response.data;
   } catch (error: any) {
@@ -1346,7 +1347,295 @@ export const getSimilaritiesStatistics = async (
     }
     throw new Error(
       error.response?.data?.detail ||
-        "Erro ao buscar estatísticas de similaridades."
+        "Erro ao buscar estatísticas de similaridades.",
     );
   }
+};
+
+// ==============================================================================
+// FUNÇÕES PARA PROCESSAMENTO DE IMAGENS (lambda_function)
+// ==============================================================================
+
+// Interface para item de imagem no upload
+export interface ImageUploadItem {
+  filename: string;
+  content: string; // base64
+}
+
+// Interface para request de upload de imagens
+export interface ImageUploadRequest {
+  environment: "test" | "production";
+  images: ImageUploadItem[];
+}
+
+// Interface para response do upload de imagens
+export interface ImageUploadResponse {
+  task_id: string;
+  project_id: string;
+  total_images: number;
+  status: string;
+  message: string;
+}
+
+// Interface para status do processamento
+export interface ImageProcessingStatusResponse {
+  project_id: string;
+  task_id: string | null;
+  environment: string;
+  status: "not_started" | "pending" | "running" | "completed" | "error";
+  progress: number;
+  current_step: string | null;
+  total_images: number;
+  processed_images: number;
+  failed_images: number;
+  processing_time_seconds: number | null;
+  error_message: string | null;
+}
+
+// Interface para erro de processamento
+export interface ImageProcessingError {
+  filename: string;
+  error: string;
+}
+
+// Interface para URLs de um SKU
+export interface ImageUrlSet {
+  high: string[];
+  medium: string[];
+  low: string[];
+  watermark: string[];
+}
+
+// Interface para resultado do processamento
+export interface ImageProcessingResultResponse {
+  project_id: string;
+  status: string;
+  total_images: number;
+  processed_images: number;
+  failed_images: number;
+  skus_count: number;
+  results: Record<string, ImageUrlSet>;
+  errors: ImageProcessingError[];
+  processing_time_seconds: number | null;
+}
+
+// Interface para response da vinculação
+export interface ImageLinkResponse {
+  project_id: string;
+  total_skus: number;
+  linked_skus: number;
+  not_found_skus: string[];
+  message: string;
+}
+
+// Interface para preview de imagens
+export interface ImagePreviewResponse {
+  total_with_images: number;
+  total_without_images: number;
+  rows: Record<string, any>[];
+  page: number;
+  page_size: number;
+  message?: string;
+}
+
+/**
+ * Faz upload de batch de imagens para processamento
+ * @param projectId - ID do projeto
+ * @param images - Lista de imagens (filename + content base64)
+ * @param environment - Ambiente: 'test' ou 'production'
+ */
+export const uploadImagesBatch = async (
+  projectId: string,
+  images: ImageUploadItem[],
+  environment: "test" | "production" = "test",
+): Promise<ImageUploadResponse> => {
+  try {
+    const response = await api.post<ImageUploadResponse>(
+      `/validation/${projectId}/images/upload`,
+      {
+        environment,
+        images,
+      },
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 403) {
+      throw new Error("Sem permissão para este projeto.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao fazer upload das imagens.",
+    );
+  }
+};
+
+/**
+ * Busca o status do processamento de imagens
+ * @param projectId - ID do projeto
+ */
+export const getImagesProcessingStatus = async (
+  projectId: string,
+): Promise<ImageProcessingStatusResponse> => {
+  try {
+    const response = await api.get<ImageProcessingStatusResponse>(
+      `/validation/${projectId}/images/status`,
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail ||
+        "Erro ao buscar status do processamento de imagens.",
+    );
+  }
+};
+
+/**
+ * Busca o resultado completo do processamento de imagens
+ * @param projectId - ID do projeto
+ */
+export const getImagesProcessingResult = async (
+  projectId: string,
+): Promise<ImageProcessingResultResponse> => {
+  try {
+    const response = await api.get<ImageProcessingResultResponse>(
+      `/validation/${projectId}/images/result`,
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail || "Processamento ainda não concluído.",
+      );
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto ou processamento não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail ||
+        "Erro ao buscar resultado do processamento.",
+    );
+  }
+};
+
+/**
+ * Vincula imagens processadas aos registros do DuckDB
+ * @param projectId - ID do projeto
+ * @param imageUrls - Opcional: URLs de imagens (se não fornecido, usa última task)
+ */
+export const linkImagesToProject = async (
+  projectId: string,
+  imageUrls?: Record<string, ImageUrlSet>,
+): Promise<ImageLinkResponse> => {
+  try {
+    const response = await api.post<ImageLinkResponse>(
+      `/validation/${projectId}/images/link`,
+      imageUrls ? { image_urls: imageUrls } : {},
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 400) {
+      throw new Error(
+        error.response?.data?.detail ||
+          "Processe as imagens primeiro ou forneça URLs.",
+      );
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao vincular imagens ao projeto.",
+    );
+  }
+};
+
+/**
+ * Busca preview dos registros com imagens vinculadas
+ * @param projectId - ID do projeto
+ * @param page - Página atual
+ * @param pageSize - Tamanho da página
+ */
+export const getImagesPreview = async (
+  projectId: string,
+  page: number = 1,
+  pageSize: number = 50,
+): Promise<ImagePreviewResponse> => {
+  try {
+    const response = await api.get<ImagePreviewResponse>(
+      `/validation/${projectId}/images/preview`,
+      {
+        params: { page, page_size: pageSize },
+      },
+    );
+    return response.data;
+  } catch (error: any) {
+    if (error.response?.status === 401) {
+      throw new Error("Não autenticado. Faça login novamente.");
+    }
+    if (error.response?.status === 404) {
+      throw new Error("Projeto não encontrado.");
+    }
+    throw new Error(
+      error.response?.data?.detail || "Erro ao buscar preview de imagens.",
+    );
+  }
+};
+
+/**
+ * Converte um arquivo File para base64
+ * @param file - Arquivo a ser convertido
+ */
+export const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove o prefixo "data:image/...;base64,"
+      const base64 = result.split(",")[1];
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
+
+/**
+ * Prepara lista de arquivos para upload
+ * @param files - FileList ou array de Files
+ */
+export const prepareImagesForUpload = async (
+  files: FileList | File[],
+): Promise<ImageUploadItem[]> => {
+  const imageItems: ImageUploadItem[] = [];
+
+  for (const file of Array.from(files)) {
+    // Filtrar apenas imagens
+    if (!file.type.startsWith("image/")) {
+      continue;
+    }
+
+    const content = await fileToBase64(file);
+    imageItems.push({
+      filename: file.name,
+      content,
+    });
+  }
+
+  return imageItems;
 };

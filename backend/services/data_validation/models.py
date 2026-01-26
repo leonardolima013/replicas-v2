@@ -99,3 +99,63 @@ class ProjectReport(Base):
     parts_updated = Column(Integer, nullable=True)     # Peças realmente atualizadas
     brands_created = Column(Integer, nullable=True)    # Marcas realmente criadas
     publish_time_seconds = Column(Float, nullable=True)
+
+
+class ImageProcessingTask(Base):
+    """
+    Armazena o status e resultado do processamento de imagens (lambda_function).
+    Processado em background via Celery.
+    """
+    __tablename__ = "validation_image_processing_tasks"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("validation_projects.id"), nullable=False)
+    project = relationship("Project")
+    
+    # === Configuração ===
+    environment = Column(String, default="test")  # 'test' ou 'production' (test-lambda ou media)
+    
+    # === Métricas ===
+    total_images = Column(Integer, default=0)
+    processed_images = Column(Integer, default=0)
+    failed_images = Column(Integer, default=0)
+    
+    # === Progresso do Processamento ===
+    status = Column(String, default="pending")  # pending, running, completed, error
+    processing_progress = Column(Float, default=0.0)
+    processing_step = Column(String, nullable=True)
+    processing_time_seconds = Column(Float, nullable=True)
+    
+    # === Resultado ===
+    result_data = Column(JSON, nullable=True)  # {sku: {high: [urls], medium: [urls], ...}}
+    errors_data = Column(JSON, nullable=True)  # [{filename: str, error: str}]
+    
+    # === Erro Fatal (se houver) ===
+    error_message = Column(Text, nullable=True)
+    
+    # === Celery Task ===
+    celery_task_id = Column(String, nullable=True)
+    
+    # === Timestamps ===
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class ImageLinkingResult(Base):
+    """
+    Armazena o resultado da vinculação de imagens ao DuckDB.
+    """
+    __tablename__ = "validation_image_linking_results"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(String, ForeignKey("validation_projects.id"), nullable=False)
+    project = relationship("Project")
+    
+    # === Métricas ===
+    total_skus = Column(Integer, default=0)
+    linked_skus = Column(Integer, default=0)
+    not_found_skus = Column(JSON, default=list)  # Lista de SKUs não encontrados no CSV
+    
+    # === Timestamps ===
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -17,8 +17,11 @@ from backend.core import models, database
 from backend.routers import auth, users
 from backend.services.replicas import router as replicas_router
 from backend.services.data_validation import router as dv_router
+from backend.services.data_validation import models as dv_models  # Import DV models for table creation
 
+# Create all tables (core + data_validation)
 models.Base.metadata.create_all(bind=database.engine)
+dv_models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Replicas-v2")
 

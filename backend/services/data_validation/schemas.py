@@ -316,3 +316,85 @@ class ValidationHistoryResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# ==============================================================================
+# SCHEMAS PARA PROCESSAMENTO DE IMAGENS (lambda_function)
+# ==============================================================================
+
+class ImageUploadItem(BaseModel):
+    """Item de imagem para upload"""
+    filename: str  # Nome do arquivo: '{search_ref}-{indice}.jpg'
+    content: str   # Conteúdo em base64
+
+
+class ImageUploadRequest(BaseModel):
+    """Request para upload de batch de imagens"""
+    environment: str = "test"  # 'test' ou 'production'
+    images: List[ImageUploadItem]
+
+
+class ImageUploadResponse(BaseModel):
+    """Response do upload de imagens"""
+    task_id: str
+    project_id: str
+    total_images: int
+    status: str
+    message: str
+
+
+class ImageProcessingError(BaseModel):
+    """Erro de processamento de uma imagem"""
+    filename: str
+    error: str
+
+
+class ImageUrlSet(BaseModel):
+    """URLs de todas as variantes de um SKU"""
+    high: List[str]       # URLs das imagens em alta resolução
+    medium: List[str]     # URLs das imagens em média resolução
+    low: List[str]        # URLs das imagens em baixa resolução
+    watermark: List[str]  # URLs das imagens com marca d'água
+
+
+class ImageProcessingStatusResponse(BaseModel):
+    """Response do status do processamento de imagens"""
+    project_id: str
+    task_id: Optional[str] = None
+    environment: str = "test"
+    status: str  # pending, running, completed, error
+    progress: float = 0.0
+    current_step: Optional[str] = None
+    total_images: int = 0
+    processed_images: int = 0
+    failed_images: int = 0
+    processing_time_seconds: Optional[float] = None
+    error_message: Optional[str] = None
+
+
+class ImageProcessingResultResponse(BaseModel):
+    """Response completo do resultado do processamento"""
+    project_id: str
+    status: str
+    total_images: int
+    processed_images: int
+    failed_images: int
+    skus_count: int
+    results: Dict[str, ImageUrlSet]  # {sku: ImageUrlSet}
+    errors: List[ImageProcessingError]
+    processing_time_seconds: Optional[float] = None
+
+
+class ImageLinkRequest(BaseModel):
+    """Request para vincular imagens ao DuckDB"""
+    # Se não fornecido, usa o resultado da última task de processamento
+    image_urls: Optional[Dict[str, ImageUrlSet]] = None
+
+
+class ImageLinkResponse(BaseModel):
+    """Response da vinculação de imagens"""
+    project_id: str
+    total_skus: int
+    linked_skus: int
+    not_found_skus: List[str]  # SKUs da imagem que não existem no CSV
+    message: str

@@ -13,6 +13,7 @@ import {
   Copy,
   Sparkles,
   Link2,
+  Image,
 } from "lucide-react";
 import ViewStep from "./steps/ViewStep";
 import ColumnsStep from "./steps/ColumnsStep";
@@ -22,6 +23,7 @@ import DataStep from "./steps/DataStep";
 import StatisticsStep from "./steps/StatisticsStep";
 import ReviewStep from "./steps/ReviewStep";
 import BrandMappingStep from "./steps/BrandMappingStep";
+import MediaIngestionStep from "./steps/MediaIngestionStep";
 import * as validationService from "../../services/validationService";
 import Modal from "../../components/Modal";
 import { useModal } from "../../hooks/useModal";
@@ -72,12 +74,18 @@ const steps: Step[] = [
   },
   {
     id: 6,
+    title: "Ingestão de Imagens",
+    icon: <Image className="w-5 h-5" />,
+    getComponent: (readOnly) => <MediaIngestionStep readOnly={readOnly} />,
+  },
+  {
+    id: 7,
     title: "Estatísticas",
     icon: <BarChart3 className="w-5 h-5" />,
     getComponent: () => <StatisticsStep />,
   },
   {
-    id: 7,
+    id: 8,
     title: "Revisão e Envio",
     icon: <Send className="w-5 h-5" />,
     getComponent: () => <ReviewStep />,

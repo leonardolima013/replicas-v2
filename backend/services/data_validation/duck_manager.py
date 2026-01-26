@@ -1614,3 +1614,203 @@ class DuckSession:
             }
         finally:
             conn.close()
+
+    # ==========================================================================
+    # MÉTODOS PARA PROCESSAMENTO DE IMAGENS (lambda_function)
+    # ==========================================================================
+    
+    def ensure_image_columns_exist(self, table_name: str = "raw_data"):
+        """
+        Garante que as colunas de imagem existem na tabela.
+        Cria as colunas se não existirem.
+        
+        Colunas criadas:
+        - file_high: URLs das imagens em alta resolução (JSON array)
+        - file_medium: URLs das imagens em média resolução (JSON array)
+        - file_low: URLs das imagens em baixa resolução (JSON array)
+        - file_water_mark: URLs das imagens com marca d'água (JSON array)
+        """
+        conn = self._get_conn(read_only=False)
+        try:
+            # Obter colunas existentes
+            existing_columns = set(self._get_columns_from_conn(conn, table_name))
+            
+            # Colunas de imagem necessárias
+            image_columns = ['file_high', 'file_medium', 'file_low', 'file_water_mark']
+            
+            for col in image_columns:
+                if col not in existing_columns:
+                    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {col} VARCHAR DEFAULT '[]'")
+            
+            return {"status": "success", "columns_added": [c for c in image_columns if c not in existing_columns]}
+        finally:
+            conn.close()
+    
+    def get_all_search_refs(self, table_name: str = "raw_data") -> set:
+        """
+        Retorna um set com todos os search_ref únicos da tabela.
+        Útil para validar se os SKUs das imagens existem no CSV.
+        """
+        conn = self._get_conn(read_only=True)
+        try:
+            result = conn.execute(f"""
+                SELECT DISTINCT UPPER(TRIM(search_ref)) as ref
+                FROM {table_name}
+                WHERE search_ref IS NOT NULL AND TRIM(search_ref) != ''
+            """).fetchall()
+            
+            return {row[0] for row in result}
+        finally:
+            conn.close()
+    
+    def link_image_urls(
+        self,
+        image_urls: dict,
+        table_name: str = "raw_data"
+    ) -> dict:
+        """
+        Vincula URLs de imagens aos registros do DuckDB baseado no search_ref.
+        
+        Args:
+            image_urls: Dicionário no formato:
+                {
+                    "SKU123": {
+                        "high": ["url1", "url2"],
+                        "medium": ["url1", "url2"],
+                        "low": ["url1", "url2"],
+                        "watermark": ["url1", "url2"]
+                    },
+                    ...
+                }
+            table_name: Nome da tabela no DuckDB
+            
+        Returns:
+            dict com métricas:
+                - total_skus: Total de SKUs recebidos
+                - linked_skus: SKUs vinculados com sucesso
+                - not_found_skus: Lista de SKUs não encontrados no CSV
+        """
+        conn = self._get_conn(read_only=False)
+        try:
+            # Garantir que as colunas existem
+            existing_columns = set(self._get_columns_from_conn(conn, table_name))
+            image_columns = ['file_high', 'file_medium', 'file_low', 'file_water_mark']
+            
+            for col in image_columns:
+                if col not in existing_columns:
+                    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {col} VARCHAR DEFAULT '[]'")
+            
+            # Obter todos os search_refs existentes
+            existing_refs = conn.execute(f"""
+                SELECT DISTINCT UPPER(TRIM(search_ref)) as ref
+                FROM {table_name}
+                WHERE search_ref IS NOT NULL AND TRIM(search_ref) != ''
+            """).fetchall()
+            existing_refs_set = {row[0] for row in existing_refs}
+            
+            # Processar cada SKU
+            linked_count = 0
+            not_found = []
+            
+            for sku, urls in image_urls.items():
+                sku_upper = sku.upper().strip()
+                
+                # Verificar se o SKU existe no CSV
+                if sku_upper not in existing_refs_set:
+                    not_found.append(sku)
+                    continue
+                
+                # Mapear nomes das variantes para colunas
+                column_mapping = {
+                    'high': 'file_high',
+                    'medium': 'file_medium',
+                    'low': 'file_low',
+                    'watermark': 'file_water_mark'
+                }
+                
+                # Construir UPDATE
+                set_clauses = []
+                for variant_name, column_name in column_mapping.items():
+                    url_list = urls.get(variant_name, [])
+                    # Serializar como JSON
+                    url_json = json.dumps(url_list)
+                    # Escapar aspas simples para SQL
+                    url_json_escaped = url_json.replace("'", "''")
+                    set_clauses.append(f"{column_name} = '{url_json_escaped}'")
+                
+                if set_clauses:
+                    update_sql = f"""
+                        UPDATE {table_name}
+                        SET {', '.join(set_clauses)}
+                        WHERE UPPER(TRIM(search_ref)) = '{sku_upper}'
+                    """
+                    conn.execute(update_sql)
+                    linked_count += 1
+            
+            return {
+                "total_skus": len(image_urls),
+                "linked_skus": linked_count,
+                "not_found_skus": not_found
+            }
+        finally:
+            conn.close()
+    
+    def get_image_linking_preview(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        table_name: str = "raw_data"
+    ) -> dict:
+        """
+        Retorna preview dos registros com imagens vinculadas.
+        
+        Returns:
+            dict com:
+                - total_with_images: Total de registros com pelo menos uma imagem
+                - total_without_images: Total de registros sem imagens
+                - rows: Preview paginado dos registros com imagens
+        """
+        conn = self._get_conn(read_only=True)
+        try:
+            # Verificar se colunas existem
+            existing_columns = set(self._get_columns_from_conn(conn, table_name))
+            
+            if 'file_high' not in existing_columns:
+                return {
+                    "total_with_images": 0,
+                    "total_without_images": 0,
+                    "rows": [],
+                    "message": "Colunas de imagem ainda não foram criadas"
+                }
+            
+            # Contar registros com imagens
+            count_with = conn.execute(f"""
+                SELECT COUNT(*) FROM {table_name}
+                WHERE file_high IS NOT NULL AND file_high != '[]' AND file_high != ''
+            """).fetchone()[0]
+            
+            # Contar registros sem imagens
+            count_without = conn.execute(f"""
+                SELECT COUNT(*) FROM {table_name}
+                WHERE file_high IS NULL OR file_high = '[]' OR file_high = ''
+            """).fetchone()[0]
+            
+            # Buscar preview paginado
+            offset = (page - 1) * page_size
+            rows = conn.execute(f"""
+                SELECT search_ref, brand, file_high, file_medium, file_low, file_water_mark
+                FROM {table_name}
+                WHERE file_high IS NOT NULL AND file_high != '[]' AND file_high != ''
+                LIMIT {page_size} OFFSET {offset}
+            """).fetchdf().to_dict(orient="records")
+            
+            return {
+                "total_with_images": count_with,
+                "total_without_images": count_without,
+                "rows": rows,
+                "page": page,
+                "page_size": page_size
+            }
+        finally:
+            conn.close()
+

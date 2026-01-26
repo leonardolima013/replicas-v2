@@ -13,3 +13,5 @@ duckdb
 pandas
 celery[redis]
 redis
+boto3
+Pillow
