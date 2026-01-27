@@ -56,7 +56,7 @@ class UpdateFieldConfig:
         'width', 'depth', 'height', 'notes', 'application'
     ]
     
-    def __init__(self, force_override: List[str] = None, concatenate: List[str] = None, update_if_empty: List[str] = None):
+    def __init__(self, force_override: List[str] = None, concatenate: List[str] = None, update_if_empty: List[str] = None, image_mode: str = "concatenate"):
         """
         Inicializa configuração de campos
         
@@ -64,10 +64,12 @@ class UpdateFieldConfig:
             force_override: Campos que sempre substituem o valor
             concatenate: Campos que devem ser concatenados
             update_if_empty: Campos atualizados apenas se estiverem vazios/nulos/0
+            image_mode: Modo de atualização de imagens ('ignore', 'concatenate', 'add_if_empty')
         """
         self.force_override_fields = force_override or []
         self.concatenate_fields = concatenate or []
         self.update_if_empty_fields = update_if_empty or []
+        self.image_mode = image_mode
     
     @classmethod
     def from_publish_config(cls, config: PublishConfiguration) -> 'UpdateFieldConfig':
@@ -75,7 +77,8 @@ class UpdateFieldConfig:
         return cls(
             force_override=config.force_override,
             concatenate=config.concatenate,
-            update_if_empty=config.update_if_empty
+            update_if_empty=config.update_if_empty,
+            image_mode=config.image_mode
         )
     
     def get_updatable_fields(self) -> List[str]:
@@ -158,6 +161,11 @@ class IngestionReport:
     similarity_parts_updated: int = 0
     # Activities
     activities_created: int = 0
+    # Assets de imagens
+    assets_created: int = 0
+    part_images_created: int = 0
+    skipped_incomplete_images: List[str] = field(default_factory=list)
+    skipped_existing_images: int = 0
     # Erros e avisos
     warnings: List[str] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
@@ -321,9 +329,9 @@ class PartRepository:
             for i in range(0, len(parts_to_check), batch_size):
                 batch = parts_to_check[i:i + batch_size]
                 query = """
-                    SELECT manufacturer_ref, brand_id 
+                    SELECT search_ref, brand_id 
                     FROM catalog_part 
-                    WHERE (manufacturer_ref, brand_id) IN %s
+                    WHERE (search_ref, brand_id) IN %s
                 """
                 cursor.execute(query, (tuple(batch),))
                 results = cursor.fetchall()
@@ -338,11 +346,11 @@ class PartRepository:
         Busca detalhes completos de peças existentes
         
         Args:
-            parts_to_fetch: Lista de tuplas (manufacturer_ref, brand_id)
+            parts_to_fetch: Lista de tuplas (search_ref, brand_id)
             updatable_fields: Lista de campos a buscar
         
         Returns:
-            Dict[(manufacturer_ref, brand_id), {campo: valor}]
+            Dict[(search_ref, brand_id), {campo: valor}]
         """
         if not parts_to_fetch or not updatable_fields:
             return {}
@@ -352,20 +360,20 @@ class PartRepository:
         
         try:
             batch_size = 1000
-            fields_str = ', '.join(['id', 'manufacturer_ref', 'brand_id'] + updatable_fields)
+            fields_str = ', '.join(['id', 'search_ref', 'brand_id'] + updatable_fields)
             
             for i in range(0, len(parts_to_fetch), batch_size):
                 batch = parts_to_fetch[i:i + batch_size]
                 query = f"""
                     SELECT {fields_str}
                     FROM catalog_part
-                    WHERE (manufacturer_ref, brand_id) IN %s
+                    WHERE (search_ref, brand_id) IN %s
                 """
                 cursor.execute(query, (tuple(batch),))
                 results = cursor.fetchall()
                 
                 for row in results:
-                    key = (row['manufacturer_ref'], row['brand_id'])
+                    key = (row['search_ref'], row['brand_id'])
                     parts_dict[key] = dict(row)
             
             return parts_dict
@@ -663,6 +671,233 @@ class SimilarityRepository:
             cursor.close()
 
 
+class AssetRepository:
+    """Repository para operações com asset_asset e catalog_part_images"""
+    
+    def __init__(self, conn: psycopg2.extensions.connection):
+        self.conn = conn
+    
+    @staticmethod
+    def extract_filename_from_url(url: str) -> str:
+        """
+        Extrai o nome do arquivo de uma URL S3.
+        
+        Args:
+            url: URL completa, ex: "https://bucket.s3.region.amazonaws.com/folder/98601A-0_low.png"
+            
+        Returns:
+            Nome do arquivo, ex: "98601A-0_low.png"
+        """
+        if not url:
+            return ""
+        return url.rstrip('/').split('/')[-1]
+    
+    def process_image_assets(
+        self,
+        data_list: List[Dict],
+        part_id_mapping: Dict[Tuple[str, int], int],
+        image_mode: str = "concatenate"
+    ) -> Dict:
+        """
+        Processa colunas de imagem e cria registros em asset_asset e catalog_part_images.
+        
+        Args:
+            data_list: Lista de dicts com dados das peças (incluindo file_high, file_medium, etc)
+            part_id_mapping: Mapeamento (search_ref, brand_id) -> part_id
+            image_mode: Modo de atualização de imagens:
+                - 'ignore': Não adiciona nenhuma imagem
+                - 'concatenate': Adiciona imagens para todas as peças (novas e existentes)
+                - 'add_if_empty': Adiciona imagens apenas para peças que não têm imagens
+            
+        Returns:
+            Dict com métricas:
+                - assets_created: Quantidade de registros em asset_asset
+                - part_images_created: Quantidade de vínculos em catalog_part_images
+                - skipped_incomplete: Lista de SKUs com imagens incompletas
+                - skipped_existing_images: Quantidade de peças ignoradas por já terem imagens
+        """
+        stats = {
+            'assets_created': 0,
+            'part_images_created': 0,
+            'skipped_incomplete': [],
+            'skipped_existing_images': 0
+        }
+        
+        # Se modo é 'ignore', retornar sem processar
+        if image_mode == 'ignore':
+            logger.info("Modo de imagem 'ignore': nenhuma imagem será processada")
+            return stats
+        
+        # Se modo é 'add_if_empty', buscar quais peças já têm imagens
+        parts_with_images: Set[int] = set()
+        if image_mode == 'add_if_empty':
+            cursor = self.conn.cursor()
+            try:
+                # Buscar todos os part_ids que já têm pelo menos uma imagem
+                part_ids = list(part_id_mapping.values())
+                if part_ids:
+                    query = """
+                        SELECT DISTINCT part_id 
+                        FROM catalog_part_images 
+                        WHERE part_id = ANY(%s)
+                    """
+                    cursor.execute(query, (part_ids,))
+                    parts_with_images = {row[0] for row in cursor.fetchall()}
+                    logger.info(f"Modo 'add_if_empty': {len(parts_with_images)} peças já possuem imagens e serão ignoradas")
+            finally:
+                cursor.close()
+        
+        # Coletar todos os assets e vínculos a criar
+        assets_to_insert = []  # Lista de dicts com dados do asset
+        part_image_links = []  # Lista de (part_id, índice_no_assets_to_insert)
+        
+        for row in data_list:
+            search_ref = str(row.get('search_ref', '')).strip().upper()
+            brand_id = row.get('brand_id')
+            
+            if not search_ref or not brand_id:
+                continue
+            
+            # Buscar part_id
+            key = (search_ref, brand_id)
+            part_id = part_id_mapping.get(key)
+            
+            if not part_id:
+                logger.debug(f"Part_id não encontrado para {search_ref}/{brand_id}")
+                continue
+            
+            # Se modo é 'add_if_empty', verificar se peça já tem imagens
+            if image_mode == 'add_if_empty' and part_id in parts_with_images:
+                stats['skipped_existing_images'] += 1
+                continue
+            
+            # Obter listas de URLs das colunas de imagem
+            try:
+                file_high_list = json.loads(row.get('file_high', '[]') or '[]')
+                file_medium_list = json.loads(row.get('file_medium', '[]') or '[]')
+                file_low_list = json.loads(row.get('file_low', '[]') or '[]')
+                file_water_mark_list = json.loads(row.get('file_water_mark', '[]') or '[]')
+            except (json.JSONDecodeError, TypeError):
+                logger.warning(f"Erro ao parsear JSON de imagens para {search_ref}")
+                continue
+            
+            # Verificar se tem imagens
+            if not file_high_list:
+                continue
+            
+            # Verificar se todas as listas têm o mesmo tamanho
+            list_lengths = [
+                len(file_high_list),
+                len(file_medium_list),
+                len(file_low_list),
+                len(file_water_mark_list)
+            ]
+            
+            if len(set(list_lengths)) != 1:
+                # Listas com tamanhos diferentes - imagens incompletas
+                stats['skipped_incomplete'].append(search_ref)
+                logger.warning(f"SKU {search_ref} tem imagens incompletas: tamanhos {list_lengths}")
+                continue
+            
+            # Criar quartetos de assets
+            num_images = len(file_high_list)
+            for i in range(num_images):
+                # Verificar se todas as 4 variantes existem para este índice
+                high_url = file_high_list[i] if i < len(file_high_list) else None
+                medium_url = file_medium_list[i] if i < len(file_medium_list) else None
+                low_url = file_low_list[i] if i < len(file_low_list) else None
+                watermark_url = file_water_mark_list[i] if i < len(file_water_mark_list) else None
+                
+                if not all([high_url, medium_url, low_url, watermark_url]):
+                    stats['skipped_incomplete'].append(f"{search_ref}[{i}]")
+                    continue
+                
+                # Extrair filenames das URLs
+                asset_data = {
+                    'file_high': self.extract_filename_from_url(high_url),
+                    'file_medium': self.extract_filename_from_url(medium_url),
+                    'file_low': self.extract_filename_from_url(low_url),
+                    'file_water_mark': self.extract_filename_from_url(watermark_url)
+                }
+                
+                asset_index = len(assets_to_insert)
+                assets_to_insert.append(asset_data)
+                part_image_links.append((part_id, asset_index))
+        
+        if not assets_to_insert:
+            logger.info("Nenhum asset de imagem para inserir")
+            return stats
+        
+        # Inserir assets em bulk
+        cursor = self.conn.cursor()
+        try:
+            from datetime import datetime
+            timestamp_now = datetime.now()
+            
+            # Preparar dados para inserção
+            values_list = []
+            for asset in assets_to_insert:
+                values_list.append((
+                    1,  # type sempre = 1
+                    timestamp_now,  # uploaded_at
+                    asset['file_high'],
+                    asset['file_medium'],
+                    asset['file_low'],
+                    asset['file_water_mark']
+                ))
+            
+            query = """
+                INSERT INTO asset_asset 
+                (type, uploaded_at, file_high, file_medium, file_low, file_water_mark)
+                VALUES %s
+                RETURNING id
+            """
+            
+            result = psycopg2.extras.execute_values(
+                cursor,
+                query,
+                values_list,
+                template="(%s, %s, %s, %s, %s, %s)",
+                page_size=1000,
+                fetch=True
+            )
+            
+            inserted_asset_ids = [row[0] for row in result]
+            stats['assets_created'] = len(inserted_asset_ids)
+            logger.info(f"Inseridos {stats['assets_created']} registros em asset_asset")
+            
+            # Agora criar vínculos em catalog_part_images
+            part_images_data = []
+            for part_id, asset_index in part_image_links:
+                asset_id = inserted_asset_ids[asset_index]
+                part_images_data.append((part_id, asset_id))
+            
+            if part_images_data:
+                query = """
+                    INSERT INTO catalog_part_images (part_id, asset_id)
+                    VALUES %s
+                """
+                
+                psycopg2.extras.execute_values(
+                    cursor,
+                    query,
+                    part_images_data,
+                    template="(%s, %s)",
+                    page_size=1000
+                )
+                
+                stats['part_images_created'] = len(part_images_data)
+                logger.info(f"Inseridos {stats['part_images_created']} registros em catalog_part_images")
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"Erro ao inserir assets: {e}")
+            raise
+        finally:
+            cursor.close()
+
+
 # ============================================================================
 # PIPELINE DE PUBLICAÇÃO
 # ============================================================================
@@ -681,6 +916,7 @@ class PublishPipeline:
         self.brand_repo = BrandRepository(conn)
         self.part_repo = PartRepository(conn)
         self.similarity_repo = SimilarityRepository(conn)
+        self.asset_repo = AssetRepository(conn)
         self.author_id = author_id
         self.current_owner_id = current_owner_id  # Pode ser None
         self.update_config = update_config
@@ -799,12 +1035,23 @@ class PublishPipeline:
             report.parts_existing = len(existing_parts_data)
             logger.info(f"Peças novas: {len(new_parts_data)}, Peças existentes: {len(existing_parts_data)}")
             
+            # Mapeamento de (search_ref, brand_id) -> part_id para uso na FASE 9
+            part_id_mapping = {}
+            
             # FASE 6: Inserir novas peças
             logger.info("FASE 6: Inserindo novas peças")
+            inserted_ids = []
             if new_parts_data:
                 parts_tuples = self._prepare_parts_for_insert(new_parts_data)
                 inserted_count, inserted_ids = self.part_repo.bulk_insert_parts(parts_tuples)
                 report.parts_inserted = inserted_count
+                
+                # Mapear IDs inseridos para uso na FASE 9
+                for i, row in enumerate(new_parts_data):
+                    if i < len(inserted_ids):
+                        search_ref = str(row.get('search_ref', '')).strip().upper()
+                        brand_id = row.get('brand_id')
+                        part_id_mapping[(search_ref, brand_id)] = inserted_ids[i]
                 
                 # Criar activities
                 if inserted_ids:
@@ -817,66 +1064,79 @@ class PublishPipeline:
             logger.info("FASE 7: Atualizando peças existentes")
             updatable_fields = self.update_config.get_updatable_fields()
             
-            if existing_parts_data and updatable_fields:
+            # Sempre buscar IDs de peças existentes para a FASE 9 (assets de imagens)
+            if existing_parts_data:
                 existing_keys = [(r.get('search_ref', '').strip().upper(), r.get('brand_id')) 
                                 for r in existing_parts_data]
-                existing_details = self.part_repo.fetch_parts_details(existing_keys, updatable_fields)
                 
-                updates_to_apply = []
-                update_activities = []
+                # Se tem campos para atualizar, buscar detalhes completos
+                if updatable_fields:
+                    existing_details = self.part_repo.fetch_parts_details(existing_keys, updatable_fields)
+                else:
+                    # Buscar apenas IDs para mapeamento (FASE 9)
+                    existing_details = self.part_repo.fetch_parts_details(existing_keys, ['id'])
                 
-                for row in existing_parts_data:
-                    search_ref = row.get('search_ref', '').strip().upper()
-                    brand_id = row.get('brand_id')
-                    key = (search_ref, brand_id)
+                # Mapear IDs das peças existentes para FASE 9
+                for key, details in existing_details.items():
+                    part_id_mapping[key] = details['id']
+                
+                # Processar atualizações apenas se houver campos configurados
+                if updatable_fields:
+                    updates_to_apply = []
+                    update_activities = []
                     
-                    current_part = existing_details.get(key)
-                    if not current_part:
-                        continue
-                    
-                    part_id = current_part['id']
-                    field_updates = {}
-                    
-                    for field_name in updatable_fields:
-                        current_value = current_part.get(field_name)
-                        new_value = self._get_field_value(row, field_name)
+                    for row in existing_parts_data:
+                        search_ref = row.get('search_ref', '').strip().upper()
+                        brand_id = row.get('brand_id')
+                        key = (search_ref, brand_id)
                         
-                        should_update, reason = self.update_config.should_update_field(
-                            field_name, current_value, new_value
-                        )
+                        current_part = existing_details.get(key)
+                        if not current_part:
+                            continue
                         
-                        if should_update:
-                            if reason == 'concatenate' and current_value:
-                                final_value = f"{current_value}\n\n{new_value}"
-                            else:
-                                final_value = new_value
+                        part_id = current_part['id']
+                        field_updates = {}
+                        
+                        for field_name in updatable_fields:
+                            current_value = current_part.get(field_name)
+                            new_value = self._get_field_value(row, field_name)
                             
-                            field_updates[field_name] = final_value
-                            report.fields_updated += 1
+                            should_update, reason = self.update_config.should_update_field(
+                                field_name, current_value, new_value
+                            )
                             
-                            update_activities.append({
+                            if should_update:
+                                if reason == 'concatenate' and current_value:
+                                    final_value = f"{current_value}\n\n{new_value}"
+                                else:
+                                    final_value = new_value
+                                
+                                field_updates[field_name] = final_value
+                                report.fields_updated += 1
+                                
+                                update_activities.append({
+                                    'part_id': part_id,
+                                    'attribute': field_name,
+                                    'previous_value': current_value,
+                                    'current_value': final_value
+                                })
+                        
+                        if field_updates:
+                            updates_to_apply.append({
                                 'part_id': part_id,
-                                'attribute': field_name,
-                                'previous_value': current_value,
-                                'current_value': final_value
+                                'field_updates': field_updates
                             })
                     
-                    if field_updates:
-                        updates_to_apply.append({
-                            'part_id': part_id,
-                            'field_updates': field_updates
-                        })
-                
-                if updates_to_apply:
-                    report.parts_updated = self.part_repo.bulk_update_parts(updates_to_apply)
+                    if updates_to_apply:
+                        report.parts_updated = self.part_repo.bulk_update_parts(updates_to_apply)
+                        
+                        if update_activities:
+                            activities_count = self.part_repo.bulk_insert_update_activities(
+                                update_activities, self.author_id, self.current_owner_id
+                            )
+                            report.activities_created += activities_count
                     
-                    if update_activities:
-                        activities_count = self.part_repo.bulk_insert_update_activities(
-                            update_activities, self.author_id, self.current_owner_id
-                        )
-                        report.activities_created += activities_count
-                
-                report.parts_skipped = len(existing_parts_data) - report.parts_updated
+                    report.parts_skipped = len(existing_parts_data) - report.parts_updated
             
             # FASE 8: Processar similaridades
             logger.info("FASE 8: Processando similaridades")
@@ -887,6 +1147,41 @@ class PublishPipeline:
                     report.similarity_groups_created = similarity_stats.get('groups_created', 0)
                     report.similarity_groups_merged = similarity_stats.get('groups_merged', 0)
                     report.similarity_parts_updated = similarity_stats.get('parts_updated', 0)
+            
+            # FASE 9: Processar assets de imagens
+            logger.info("FASE 9: Processando assets de imagens")
+            image_columns = {'file_high', 'file_medium', 'file_low', 'file_water_mark'}
+            has_image_columns = image_columns.issubset(set(columns))
+            
+            # Obter modo de imagem da configuração
+            image_mode = self.update_config.image_mode if hasattr(self.update_config, 'image_mode') else 'concatenate'
+            logger.info(f"Modo de imagem configurado: {image_mode}")
+            
+            if has_image_columns and part_id_mapping:
+                logger.info(f"Colunas de imagem encontradas. Processando assets para {len(part_id_mapping)} peças...")
+                asset_stats = self.asset_repo.process_image_assets(valid_data, part_id_mapping, image_mode)
+                
+                report.assets_created = asset_stats.get('assets_created', 0)
+                report.part_images_created = asset_stats.get('part_images_created', 0)
+                report.skipped_incomplete_images = asset_stats.get('skipped_incomplete', [])
+                report.skipped_existing_images = asset_stats.get('skipped_existing_images', 0)
+                
+                if report.skipped_incomplete_images:
+                    report.warnings.append(
+                        f"{len(report.skipped_incomplete_images)} imagem(ns) ignorada(s) por estarem incompletas"
+                    )
+                
+                if report.skipped_existing_images > 0:
+                    report.warnings.append(
+                        f"{report.skipped_existing_images} peça(s) ignorada(s) por já possuírem imagens (modo add_if_empty)"
+                    )
+                
+                logger.info(f"Assets: {report.assets_created} criados, {report.part_images_created} vínculos")
+            else:
+                if not has_image_columns:
+                    logger.info("FASE 9: Colunas de imagem não encontradas, pulando...")
+                else:
+                    logger.info("FASE 9: Nenhuma peça para vincular imagens, pulando...")
             
             # COMMIT FINAL
             self.conn.commit()
@@ -1297,6 +1592,10 @@ def execute_publish(
             similarity_groups_created=report.similarity_groups_created,
             similarity_groups_merged=report.similarity_groups_merged,
             similarity_parts_updated=report.similarity_parts_updated,
+            assets_created=report.assets_created,
+            part_images_created=report.part_images_created,
+            skipped_incomplete_images=report.skipped_incomplete_images,
+            skipped_existing_images=report.skipped_existing_images,
             execution_time_seconds=report.execution_time,
             message=f"Publicação concluída com sucesso! {report.parts_inserted} peças inseridas, {report.parts_updated} atualizadas.",
             warnings=report.warnings,

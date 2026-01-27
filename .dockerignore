@@ -1,0 +1,66 @@
+# Arquivos Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Dados temporários e sensíveis
+temp_data/
+data/
+*.duckdb
+*.xlsx
+*.xls
+*.csv
+.env
+.env.local
+
+# Node modules (frontend)
+node_modules/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+.dockerignore
+
+# Documentação temporária
+*.tmp
+*.bak
+*.backup
+
+# Python egg
+*.egg-info/
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+*.zip
+*.tar.gz
+*.rar

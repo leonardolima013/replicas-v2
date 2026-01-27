@@ -25,10 +25,20 @@ dv_models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Replicas-v2")
 
-# Configurar CORS para desenvolvimento
+# Configurar CORS de forma flexível
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:8000",
+    f"http://localhost:{os.getenv('FRONTEND_PORT', '5173')}",
+    f"http://localhost:{os.getenv('APP_PORT', '8000')}",
+]
+
+# Remover duplicatas
+allowed_origins = list(set(allowed_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

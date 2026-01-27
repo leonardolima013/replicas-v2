@@ -946,6 +946,7 @@ export interface PublishConfiguration {
   force_override: string[];
   concatenate: string[];
   update_if_empty: string[];
+  image_mode: "ignore" | "concatenate" | "add_if_empty";
 }
 
 // Interface para request de publicação
@@ -971,6 +972,11 @@ export interface PublishResult {
   similarity_groups_created: number;
   similarity_groups_merged: number;
   similarity_parts_updated: number;
+  // Assets de imagens
+  assets_created: number;
+  part_images_created: number;
+  skipped_incomplete_images: string[];
+  skipped_existing_images: number;
   execution_time_seconds: number;
   message: string;
   warnings: string[];

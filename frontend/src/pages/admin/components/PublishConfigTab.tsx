@@ -61,6 +61,21 @@ const MODE_DESCRIPTIONS: Record<FieldMode, string> = {
   update_if_empty: "Atualizar apenas se o campo estiver vazio/NULL",
 };
 
+// Tipos e configurações para modo de imagens
+type ImageMode = "ignore" | "concatenate" | "add_if_empty";
+
+const IMAGE_MODE_LABELS: Record<ImageMode, string> = {
+  ignore: "Ignorar",
+  concatenate: "Concatenar",
+  add_if_empty: "Adicionar se vazio",
+};
+
+const IMAGE_MODE_DESCRIPTIONS: Record<ImageMode, string> = {
+  ignore: "Nenhuma imagem é adicionada ao banco de dados",
+  concatenate: "Peças novas e existentes recebem imagens",
+  add_if_empty: "Apenas peças novas ou sem imagens recebem imagens",
+};
+
 export default function PublishConfigTab({
   projectId,
   onPublishSuccess,
@@ -76,6 +91,9 @@ export default function PublishConfigTab({
 
   // Configuração de campos
   const [fieldConfigs, setFieldConfigs] = useState<FieldConfig[]>([]);
+
+  // Configuração de imagens
+  const [imageMode, setImageMode] = useState<ImageMode>("concatenate");
 
   useEffect(() => {
     fetchPreview();
@@ -138,6 +156,7 @@ export default function PublishConfigTab({
             update_if_empty: fieldConfigs
               .filter((c) => c.mode === "update_if_empty")
               .map((c) => c.field),
+            image_mode: imageMode,
           };
 
           const request: validationService.PublishRequest = {
@@ -254,6 +273,50 @@ export default function PublishConfigTab({
                   </p>
                 </div>
               </div>
+
+              {/* Assets de Imagens */}
+              {(publishResult.assets_created > 0 ||
+                publishResult.part_images_created > 0 ||
+                publishResult.skipped_existing_images > 0) && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                      {publishResult.assets_created.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Assets Criados
+                    </p>
+                  </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-indigo-200 dark:border-indigo-800">
+                    <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                      {publishResult.part_images_created.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      Vínculos de Imagem
+                    </p>
+                  </div>
+                  {publishResult.skipped_existing_images > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-800">
+                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                        {publishResult.skipped_existing_images.toLocaleString()}
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Peças c/ Imagens (ignoradas)
+                      </p>
+                    </div>
+                  )}
+                  {publishResult.skipped_incomplete_images?.length > 0 && (
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-yellow-200 dark:border-yellow-800">
+                      <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                        {publishResult.skipped_incomplete_images.length}
+                      </p>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Imagens Incompletas
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {publishResult.warnings.length > 0 && (
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-4">
@@ -528,6 +591,72 @@ export default function PublishConfigTab({
             </div>
             <div>
               <strong>Concatenar:</strong> {MODE_DESCRIPTIONS.concatenate}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Configuração de Imagens */}
+      <div className="bg-white dark:bg-gray-800 rounded-card border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+          <Upload className="w-5 h-5 text-indigo-500" />
+          Configuração de Imagens
+        </h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          Configure como as imagens devem ser tratadas ao publicar peças.
+        </p>
+
+        <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex-1 min-w-[200px]">
+            <p className="font-medium text-gray-900 dark:text-white">
+              Modo de Imagens
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Defina como as imagens serão vinculadas às peças
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(["ignore", "add_if_empty", "concatenate"] as ImageMode[]).map(
+              (mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setImageMode(mode)}
+                  title={IMAGE_MODE_DESCRIPTIONS[mode]}
+                  className={`
+                  px-3 py-1.5 text-xs font-medium rounded-lg transition-all
+                  ${
+                    imageMode === mode
+                      ? mode === "ignore"
+                        ? "bg-gray-600 text-white"
+                        : mode === "add_if_empty"
+                          ? "bg-green-600 text-white"
+                          : "bg-indigo-600 text-white"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                  }
+                `}
+                >
+                  {IMAGE_MODE_LABELS[mode]}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+
+        {/* Legenda de Imagens */}
+        <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+          <p className="text-xs font-medium text-indigo-800 dark:text-indigo-300 mb-2">
+            Legenda dos modos de imagem:
+          </p>
+          <div className="grid grid-cols-1 gap-2 text-xs text-indigo-700 dark:text-indigo-400">
+            <div>
+              <strong>Ignorar:</strong> {IMAGE_MODE_DESCRIPTIONS.ignore}
+            </div>
+            <div>
+              <strong>Adicionar se vazio:</strong>{" "}
+              {IMAGE_MODE_DESCRIPTIONS.add_if_empty}
+            </div>
+            <div>
+              <strong>Concatenar:</strong> {IMAGE_MODE_DESCRIPTIONS.concatenate}
             </div>
           </div>
         </div>

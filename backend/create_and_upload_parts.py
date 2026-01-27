@@ -17,6 +17,11 @@ import time
 from datetime import datetime
 import sys
 import json
+import os
+from dotenv import load_dotenv
+
+# Carregar variáveis de ambiente
+load_dotenv()
 
 # ============================================================================
 # CONFIGURAÇÃO DE ATUALIZAÇÃO DE CAMPOS
@@ -184,12 +189,17 @@ class IngestionReport:
 # ============================================================================
 # CONFIGURAÇÃO DO BANCO DE DADOS
 # ============================================================================
+
+# Importar dotenv para carregar variáveis de ambiente
+from dotenv import load_dotenv
+load_dotenv()
+
 db_config = {
-    'host': 'localhost',
-    'port': '5432',
-    'database': 'hubbi',
-    'user': 'pgroot',
-    'password': 'pg@root'
+    'host': os.getenv('PROD_DB_HOST', 'localhost'),
+    'port': os.getenv('PROD_DB_PORT', '5432'),
+    'database': os.getenv('PROD_DB_NAME', 'hubbi'),
+    'user': os.getenv('PROD_DB_USER', 'pgroot'),
+    'password': os.getenv('PROD_DB_PASSWORD', 'pg@root')
 }
 
 # ============================================================================
@@ -2074,9 +2084,17 @@ def main():
     logger.info("INICIANDO PIPELINE DE INGESTÃO DE PEÇAS")
     logger.info("="*80)
     
-    # Configuração hardcoded do arquivo
-    FILE_PATH = '/mnt/c/Users/JF/OneDrive/Documentos/Hubbi/paccini-estoque-consolidado.xlsx'
-    AUTHOR_EMAIL = 'devhubbi@gmail.com'  # Email do usuário que executa a importação
+    # Configuração via variáveis de ambiente
+    FILE_PATH = os.getenv('DATA_FILE_PATH', '/app/data/input.xlsx')
+    AUTHOR_EMAIL = os.getenv('AUTHOR_EMAIL', 'devhubbi@gmail.com')  # Email do usuário que executa a importação
+    
+    # Verificar se o arquivo existe
+    if not os.path.exists(FILE_PATH):
+        logger.error(f"Arquivo não encontrado: {FILE_PATH}")
+        print(f"\n❌ ERRO: Arquivo '{FILE_PATH}' não encontrado.")
+        print("Configure DATA_FILE_PATH no .env ou coloque o arquivo em ./data/")
+        print("Exemplo: cp seu_arquivo.xlsx ./data/input.xlsx\n")
+        return
     
     conn = None
     try:

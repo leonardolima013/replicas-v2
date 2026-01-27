@@ -1,10 +1,34 @@
 import docker
 import socket
 import time
+import platform
+import os
 from contextlib import closing
 
+# ============================================================================
+# Conexão Docker com suporte multi-plataforma
+# ============================================================================
+
+def get_docker_client():
+    """
+    Conecta ao Docker com suporte para diferentes plataformas.
+    Linux: usa socket padrão
+    Windows: usa named pipe
+    Mac: usa socket padrão
+    """
+    try:
+        return docker.from_env()
+    except Exception as e:
+        # Fallback para Windows
+        if platform.system() == "Windows":
+            try:
+                return docker.DockerClient(base_url='npipe:////./pipe/docker_engine')
+            except:
+                pass
+        raise Exception(f"Não foi possível conectar ao Docker: {e}")
+
 # Conecta ao Docker da máquina Host (graças ao volume que montámos)
-client = docker.from_env()
+client = get_docker_client()
 
 # Credenciais ORIGINAIS que estão gravadas na imagem 'replicas/base:v1'
 # Não mude isso, senão o container não sobe ou não conseguimos logar para criar o novo user.
@@ -69,13 +93,23 @@ def create_replica_container(username: str, db_password: str):
     # Nota: A imagem já tem o usuário e senha configurados (pgroot/pg@root)
     # Não passamos POSTGRES_USER/PASSWORD pois a imagem já está configurada
     print(f"Criando container {container_name} na porta {port}")
-    container = client.containers.run(
-        image_name,
-        name=container_name,
-        detach=True,
-        ports={'5432/tcp': port},
-        environment=["PGDATA=/var/lib/postgresql/data_fixed"]
-    )
+    
+    # Obter network do ambiente (se estiver rodando em Docker Compose)
+    network_name = os.getenv('DOCKER_NETWORK', None)
+    
+    container_config = {
+        'image': image_name,
+        'name': container_name,
+        'detach': True,
+        'ports': {'5432/tcp': port},
+        'environment': ["PGDATA=/var/lib/postgresql/data_fixed"]
+    }
+    
+    # Adicionar network se estiver configurada (Docker Compose)
+    if network_name:
+        container_config['network'] = network_name
+    
+    container = client.containers.run(**container_config)
 
     try:
         # 4. Aguardar o PostgreSQL ficar pronto

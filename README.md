@@ -4,6 +4,35 @@
 
 Automated ETL pipeline for automotive parts data validation + on-demand PostgreSQL replica provisioning. Built with React, TypeScript, FastAPI, DuckDB, and Docker.
 
+**✨ Now 100% portable** - Works on Linux, Windows, and Mac without machine-specific configurations.
+
+---
+
+## ⚡ Quick Start
+
+```bash
+# Clone and configure
+git clone <repo-url>
+cd replicas-v2
+cp .env.example .env
+# Edit .env with your credentials
+
+# Validate environment
+./validate-env.sh
+
+# Start everything
+docker compose up -d
+
+# Create admin user
+docker exec -it replicas-v2_app python -m backend.scripts.create_admin
+
+# Access
+# Frontend: http://localhost:5173
+# API: http://localhost:8000/docs
+```
+
+See [QUICKSTART.md](QUICKSTART.md) for 5-minute setup or [SETUP.md](SETUP.md) for detailed guide.
+
 ---
 
 ## What It Does

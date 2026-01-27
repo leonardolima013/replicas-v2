@@ -6,30 +6,35 @@ services:
     container_name: replicas_metadados_db
     restart: always
     environment:
-      POSTGRES_USER: pgroot
-      POSTGRES_PASSWORD: pg@root
-      POSTGRES_DB: replicas_metadados_db
+      POSTGRES_USER: ${METADADOS_DB_USER:-pgroot}
+      POSTGRES_PASSWORD: ${METADADOS_DB_PASSWORD:-pg@root}
+      POSTGRES_DB: ${METADADOS_DB_NAME:-replicas_metadados_db}
     ports:
-      - "5434:5432"
+      - "${METADADOS_DB_PORT:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - replicas-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pgroot -d replicas_metadados_db"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${METADADOS_DB_USER:-pgroot} -d ${METADADOS_DB_NAME:-replicas_metadados_db}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
 
   redis:
     image: redis:7-alpine
     container_name: replicas-v2_redis
     restart: always
     ports:
-      - "6380:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - replicas-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -41,32 +46,35 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: replicas-v2_app
-    network_mode: "host"
+    ports:
+      - "${APP_PORT:-8000}:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./backend:/app/backend
       - ./temp_data:/app/temp_data
+      - ./data:/app/data
+      - ./mapeamento-marcas-invertido.json:/app/mapeamento-marcas-invertido.json:ro
     environment:
-      # Banco de metadados local (validação) - usando porta mapeada pois estamos em host mode
-      DB_HOST: localhost
-      DB_PORT: "5434"
-      POSTGRES_USER: pgroot
-      POSTGRES_PASSWORD: pg@root
-      POSTGRES_DB: replicas_metadados_db
-      # Banco de produção (publicação) - agora pode usar localhost diretamente
-      PROD_DB_HOST: ${PROD_DB_HOST:-localhost}
+      # Banco de metadados local (validação)
+      DB_HOST: db_metadados
+      DB_PORT: "5432"
+      POSTGRES_USER: ${METADADOS_DB_USER:-pgroot}
+      POSTGRES_PASSWORD: ${METADADOS_DB_PASSWORD:-pg@root}
+      POSTGRES_DB: ${METADADOS_DB_NAME:-replicas_metadados_db}
+      # Banco de produção (publicação) - host.docker.internal para acessar host
+      PROD_DB_HOST: ${PROD_DB_HOST:-host.docker.internal}
       PROD_DB_PORT: ${PROD_DB_PORT:-5432}
       PROD_DB_NAME: ${PROD_DB_NAME:-hubbi_prod}
       PROD_DB_USER: ${PROD_DB_USER:-postgres}
       PROD_DB_PASSWORD: ${PROD_DB_PASSWORD:-postgres}
-      # Redis/Celery
-      REDIS_URL: redis://localhost:6380/0
-      CELERY_BROKER_URL: redis://localhost:6380/0
-      CELERY_RESULT_BACKEND: redis://localhost:6380/0
+      # Redis/Celery - usar nome do serviço
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       # Configuração de processamento
-      MAX_CONCURRENT_PROCESSING: "1"
+      MAX_CONCURRENT_PROCESSING: ${MAX_CONCURRENT_PROCESSING:-1}
+      DATA_FILE_PATH: ${DATA_FILE_PATH:-/app/data/input.xlsx}
       # JWT e Auth
-      JWT_SECRET_KEY: "your-super-secret-key-change-in-production"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-super-secret-key-change-in-production}
       ALGORITHM: "HS256"
       ACCESS_TOKEN_EXPIRE_MINUTES: "300"
       # AWS S3
@@ -74,58 +82,60 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-hubbi-uploads-migrated}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      # Network info para replicar containers
+      DOCKER_NETWORK: replicas-network
+    networks:
+      - replicas-network
     depends_on:
       db_metadados:
         condition: service_healthy
       redis:
         condition: service_healthy
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
 
   celery_worker:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: replicas-v2_celery
-    network_mode: "host"
-    command: celery -A backend.celery_app worker --loglevel=info --concurrency=1
+    command: celery -A backend.celery_app worker --loglevel=info --concurrency=${MAX_CONCURRENT_PROCESSING:-1}
     volumes:
-      - ./backend:/app/backend
       - ./temp_data:/app/temp_data
-      - ./mapeamento-marcas-invertido.json:/app/mapeamento-marcas-invertido.json
+      - ./data:/app/data
+      - ./mapeamento-marcas-invertido.json:/app/mapeamento-marcas-invertido.json:ro
     environment:
       # Banco de metadados local
-      DB_HOST: localhost
-      DB_PORT: "5434"
-      POSTGRES_USER: pgroot
-      POSTGRES_PASSWORD: pg@root
-      POSTGRES_DB: replicas_metadados_db
+      DB_HOST: db_metadados
+      DB_PORT: "5432"
+      POSTGRES_USER: ${METADADOS_DB_USER:-pgroot}
+      POSTGRES_PASSWORD: ${METADADOS_DB_PASSWORD:-pg@root}
+      POSTGRES_DB: ${METADADOS_DB_NAME:-replicas_metadados_db}
       # Banco de produção
-      PROD_DB_HOST: ${PROD_DB_HOST:-localhost}
+      PROD_DB_HOST: ${PROD_DB_HOST:-host.docker.internal}
       PROD_DB_PORT: ${PROD_DB_PORT:-5432}
       PROD_DB_NAME: ${PROD_DB_NAME:-hubbi_prod}
       PROD_DB_USER: ${PROD_DB_USER:-postgres}
       PROD_DB_PASSWORD: ${PROD_DB_PASSWORD:-postgres}
       # Redis/Celery
-      REDIS_URL: redis://localhost:6380/0
-      CELERY_BROKER_URL: redis://localhost:6380/0
-      CELERY_RESULT_BACKEND: redis://localhost:6380/0
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       # Configuração de processamento
-      MAX_CONCURRENT_PROCESSING: "1"
+      MAX_CONCURRENT_PROCESSING: ${MAX_CONCURRENT_PROCESSING:-1}
+      DATA_FILE_PATH: ${DATA_FILE_PATH:-/app/data/input.xlsx}
       # AWS S3
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-hubbi-uploads-migrated}
       AWS_REGION: ${AWS_REGION:-us-east-1}
+      # Network info
+      DOCKER_NETWORK: replicas-network
+    networks:
+      - replicas-network
     depends_on:
       db_metadados:
         condition: service_healthy
       redis:
         condition: service_healthy
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
 
   frontend:
     build:
@@ -133,15 +143,21 @@ services:
       dockerfile: Dockerfile
     container_name: replicas-v2_frontend
     ports:
-      - "5173:5173"
+      - "${FRONTEND_PORT:-5173}:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    networks:
+      - replicas-network
     depends_on:
       - app
     command: npm run dev -- --host 0.0.0.0
+
+networks:
+  replicas-network:
+    driver: bridge
 
 volumes:
   postgres_data:

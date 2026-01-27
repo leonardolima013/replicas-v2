@@ -219,23 +219,26 @@ def process_project_report(self, project_id: str) -> dict:
             update_report_progress(db, report, 55.0, "Verificando peças existentes no banco de produção")
             
             cursor = prod_conn.cursor()
-            existing_count = 0
             batch_size = 1000
             
-            # Preparar lista de peças para verificar
-            parts_to_check = []
+            # Preparar lista de peças ÚNICAS para verificar
+            parts_to_check_set = set()
             for ref, brand in parts_in_data:
                 if brand in existing_brands:
                     brand_id = existing_brands[brand][0]
-                    parts_to_check.append((ref, brand_id))
+                    parts_to_check_set.add((ref, brand_id))
             
-            total_parts = len(parts_to_check)
-            total_batches = (total_parts + batch_size - 1) // batch_size if total_parts > 0 else 0
+            parts_to_check = list(parts_to_check_set)
+            total_unique_parts = len(parts_to_check)
+            total_batches = (total_unique_parts + batch_size - 1) // batch_size if total_unique_parts > 0 else 0
             
-            logger.info(f"📊 [{project_id}] Verificando {total_parts} peças em {total_batches} batches")
+            logger.info(f"📊 [{project_id}] Verificando {total_unique_parts} peças únicas em {total_batches} batches")
+            
+            # Coletar peças que existem no banco (sem contar duplicatas)
+            existing_parts_set = set()
             
             if parts_to_check:
-                for i in range(0, total_parts, batch_size):
+                for i in range(0, total_unique_parts, batch_size):
                     batch = parts_to_check[i:i + batch_size]
                     batch_num = (i // batch_size) + 1
                     
@@ -250,20 +253,24 @@ def process_project_report(self, project_id: str) -> dict:
                     
                     try:
                         cursor.execute("""
-                            SELECT COUNT(*) FROM catalog_part
-                            WHERE (manufacturer_ref, brand_id) IN %s
+                            SELECT search_ref, brand_id FROM catalog_part
+                            WHERE (search_ref, brand_id) IN %s
                         """, (tuple(batch),))
-                        existing_count += cursor.fetchone()[0]
+                        for row in cursor.fetchall():
+                            existing_parts_set.add((row[0], row[1]))
                     except Exception as e:
                         logger.warning(f"Erro ao verificar batch {batch_num}: {e}")
             
             cursor.close()
             
+            existing_count = len(existing_parts_set)
+            new_count = total_unique_parts - existing_count
+            
             report.parts_existing = existing_count
-            report.parts_new = total_rows - existing_count
+            report.parts_new = new_count
             db.commit()
             
-            logger.info(f"📊 [{project_id}] Peças existentes: {existing_count}, Novas: {total_rows - existing_count}")
+            logger.info(f"📊 [{project_id}] Peças únicas: {total_unique_parts}, Existentes: {existing_count}, Novas: {new_count}")
         
         # ============================================================
         # ETAPA 9: Finalizar relatório (95%)

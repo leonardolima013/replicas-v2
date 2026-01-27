@@ -21,6 +21,13 @@ class FieldUpdateMode(str, Enum):
     UPDATE_IF_EMPTY = "update_if_empty"  # Atualiza apenas se estiver vazio/NULL
 
 
+class ImageUpdateMode(str, Enum):
+    """Modo de atualização de imagens para peças existentes"""
+    IGNORE = "ignore"                    # Nenhuma imagem é adicionada
+    CONCATENATE = "concatenate"          # Adiciona imagens para novas e existentes
+    ADD_IF_EMPTY = "add_if_empty"        # Adiciona apenas se a peça não tiver imagens
+
+
 # ============================================================================
 # SCHEMAS DE CONFIGURAÇÃO
 # ============================================================================
@@ -36,13 +43,15 @@ class PublishConfiguration(BaseModel):
     force_override: List[str] = Field(default=[], description="Campos que sempre substituem o valor atual")
     concatenate: List[str] = Field(default=[], description="Campos que concatenam com valor existente")
     update_if_empty: List[str] = Field(default=[], description="Campos que atualizam apenas se vazios")
+    image_mode: str = Field(default="concatenate", description="Modo de atualização de imagens: ignore, concatenate, add_if_empty")
     
     class Config:
         json_schema_extra = {
             "example": {
                 "force_override": ["name", "ncm"],
                 "concatenate": ["notes", "application"],
-                "update_if_empty": ["barcode", "gross_weight", "net_weight"]
+                "update_if_empty": ["barcode", "gross_weight", "net_weight"],
+                "image_mode": "concatenate"
             }
         }
 
@@ -165,6 +174,12 @@ class PublishResult(BaseModel):
     similarity_groups_created: int = Field(0, description="Grupos de similaridade criados")
     similarity_groups_merged: int = Field(0, description="Grupos de similaridade mesclados")
     similarity_parts_updated: int = Field(0, description="Peças com similaridade atualizada")
+    
+    # Assets de imagens
+    assets_created: int = Field(0, description="Registros de asset_asset criados")
+    part_images_created: int = Field(0, description="Vínculos catalog_part_images criados")
+    skipped_incomplete_images: List[str] = Field(default=[], description="SKUs com imagens incompletas (faltando variantes)")
+    skipped_existing_images: int = Field(0, description="Peças ignoradas por já possuírem imagens (modo add_if_empty)")
     
     # Tempo de execução
     execution_time_seconds: float = Field(..., description="Tempo de execução em segundos")
