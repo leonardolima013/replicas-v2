@@ -2,6 +2,8 @@
 Tasks Celery para processamento assíncrono de relatórios de validação.
 """
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 import time
 import traceback
 import logging
@@ -9,6 +11,11 @@ import base64
 from datetime import datetime
 from typing import Optional, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Carregar variáveis de ambiente do .env (se existir - não existe no Docker)
+env_path = Path(__file__).parent.parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 from celery import shared_task
 from sqlalchemy.orm import Session

@@ -6,11 +6,18 @@ Descrição: Gerencia conexões com o banco de produção PostgreSQL para public
 """
 
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 import psycopg2
 import psycopg2.extras
 from typing import Optional
 from contextlib import contextmanager
 import logging
+
+# Carregar variáveis de ambiente do .env (se existir - não existe no Docker)
+env_path = Path(__file__).parent.parent.parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 logger = logging.getLogger(__name__)
 

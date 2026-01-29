@@ -2,7 +2,14 @@
 Configuração do Celery para processamento assíncrono de relatórios de validação.
 """
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from celery import Celery
+
+# Carregar variáveis de ambiente do .env (se existir - não existe no Docker)
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 # Configuração do broker Redis
 REDIS_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
